@@ -120,8 +120,11 @@ export async function getTicketsList(
 export type TicketListItem = Awaited<ReturnType<typeof getTicketsList>>[number];
 
 export async function getTicketById(id: string, workspaceId: string | null) {
+  const ticketId = id?.trim();
+  if (!ticketId) return null;
+
   const ticket = await prisma.ticket.findFirst({
-    where: { id, project: { workspaceId: workspaceId ?? undefined } },
+    where: { id: ticketId, project: { workspaceId: workspaceId ?? undefined } },
     include: {
       project: { select: { id: true, key: true, name: true } },
       assignee: { select: { id: true, name: true, email: true } },

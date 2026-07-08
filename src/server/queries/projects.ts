@@ -38,8 +38,11 @@ export async function getProjectsWithCounts(workspaceId: string | null) {
 
 /** Full project detail: metrics, ticket buckets, members, and recent activity. */
 export async function getProjectDetail(id: string, workspaceId: string | null) {
+  const projectId = id?.trim();
+  if (!projectId) return null;
+
   const project = await prisma.project.findFirst({
-    where: { id, workspaceId: workspaceId ?? undefined },
+    where: { id: projectId, workspaceId: workspaceId ?? undefined },
     include: {
       owner: { select: { id: true, name: true, email: true } },
       members: {

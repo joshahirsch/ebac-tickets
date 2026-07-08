@@ -16,9 +16,12 @@ import type { TicketListItem } from "@/server/queries/tickets";
 
 export const dynamic = "force-dynamic";
 
-export default async function ProjectDetailPage({ params }: { params: { id: string } }) {
+type RouteParams = Promise<{ id: string }>;
+
+export default async function ProjectDetailPage({ params }: { params: RouteParams }) {
+  const { id } = await params;
   const user = await requireUser();
-  const detail = await getProjectDetail(params.id, user.workspaceId);
+  const detail = await getProjectDetail(id, user.workspaceId);
   if (!detail) notFound();
 
   const { project, metrics, openTickets, doneTickets, blockedTickets, recentActivity } = detail;

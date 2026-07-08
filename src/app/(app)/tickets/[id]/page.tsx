@@ -29,9 +29,25 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export const dynamic = "force-dynamic";
 
-export default async function TicketDetailPage({ params }: { params: { id: string } }) {
+type RouteParams = Promise<{ id: string }>;
+
+export default async function TicketDetailPage({ params }: { params: RouteParams }) {
+  const { id } = await params;
   const user = await requireUser();
-  const ticket = await getTicketById(params.id, user.workspaceId);
+  const ticket = await getTicketById(id, user.workspaceId);
+
+  if (process.env.EBAC_TICKET_DEBUG === "1") {
+    console.log("[tickets/[id]/page] ticket detail resolve", {
+      routeParamId: id,
+      found: Boolean(ticket),
+      ticketId: ticket?.id ?? null,
+      ticketKey: ticket ? `${ticket.project.key}-${ticket.number}` : null,
+      title: ticket?.title ?? null,
+      projectKey: ticket?.project.key ?? null,
+      descriptionLength: ticket?.description?.length ?? 0,
+    });
+  }
+
   if (!ticket) notFound();
 
   const canEdit = can(user.role, "ticket:update");

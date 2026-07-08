@@ -1,14 +1,64 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   normalizeSortParam,
   parseTicketListSearchParams,
   quickToView,
   viewToQuick,
 } from "@/lib/ticket-list-search-params";
-import { buildTicketWhere, parseSort } from "@/server/queries/tickets";
+import { buildTicketWhere, parseSort, getTicketById } from "@/server/queries/tickets";
+
+const ticketFindFirst = vi.fn();
+
+vi.mock("@/lib/prisma", () => ({
+  prisma: {
+    ticket: {
+      findFirst: (...args: unknown[]) => ticketFindFirst(...args),
+    },
+  },
+}));
 
 const workspaceId = "ws-1";
 const userId = "user-1";
+
+beforeEach(() => {
+  vi.clearAllMocks();
+});
+
+describe("getTicketById", () => {
+  it("returns null without querying when id is empty", async () => {
+    await expect(getTicketById("", workspaceId)).resolves.toBeNull();
+    await expect(getTicketById("   ", workspaceId)).resolves.toBeNull();
+    expect(ticketFindFirst).not.toHaveBeenCalled();
+  });
+
+  it("queries by the trimmed database id and workspace", async () => {
+    ticketFindFirst.mockResolvedValue({
+      id: "cmrc5885y002ylmhmodfqkx5g",
+      number: 19,
+      title: "Draft training guide and quick-start SOP",
+      project: { id: "proj-pmgt", key: "PMGT", name: "EBAC Project Management" },
+    });
+
+    const ticket = await getTicketById("  cmrc5885y002ylmhmodfqkx5g  ", workspaceId);
+
+    expect(ticketFindFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          id: "cmrc5885y002ylmhmodfqkx5g",
+          project: { workspaceId },
+        },
+      }),
+    );
+    expect(ticket?.project.key).toBe("PMGT");
+    expect(ticket?.number).toBe(19);
+  });
+
+  it("returns null when no ticket matches the id", async () => {
+    ticketFindFirst.mockResolvedValue(null);
+
+    await expect(getTicketById("missing-ticket-id", workspaceId)).resolves.toBeNull();
+  });
+});
 
 describe("parseTicketListSearchParams", () => {
   it("maps canonical view params to quick filters", () => {
