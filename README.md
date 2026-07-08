@@ -69,6 +69,29 @@ npm run dev                  # http://localhost:3000
 
 Other scripts: `npm run typecheck`, `npm run test` (Vitest unit tests), `npm run prisma:studio`.
 
+### EBAC kickoff cards seed
+
+Seeds the initial EBAC project-management kickoff tickets into an existing project
+board (does not create a second board). Safe to run repeatedly: tickets are matched
+by **project + title**; existing non-archived cards are updated or skipped, never
+duplicated.
+
+| Command | Purpose |
+| --- | --- |
+| `npm run seed:ebac-kickoff-cards -- --dry-run` | Preview creates/updates without writing |
+| `npm run seed:ebac-kickoff-cards` | Apply the seed |
+| `npm run seed:ebac-kickoff-cards -- --ensure-project` | Create the PMGT project if missing, then seed |
+
+**Target board:** workspace slug `ebac`, project key from `EBAC_KICKOFF_PROJECT_KEY`
+(default `PMGT`, with fallbacks `EBAC` and a name match on "Project Management").
+Use `--ensure-project` for a first local run after `db:seed` when PMGT does not exist yet.
+
+**Phase mapping:** the app uses fixed ticket statuses (not custom board lists). Kickoff
+phases are stored as workspace labels (`kickoff-ready`, `discovery-decisions`, etc.)
+and mapped to statuses: Kickoff Ready / Discovery → **Backlog**; Build / UAT / Launch /
+Post-Launch → **To Do**. Checklists and acceptance criteria are embedded in the
+ticket description (no separate checklist model).
+
 ---
 
 ## Environment variables

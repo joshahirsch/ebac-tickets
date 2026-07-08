@@ -14,6 +14,7 @@
     "prisma:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
     "db:seed": "tsx prisma/seed.ts",
+    "seed:ebac-kickoff-cards": "tsx scripts/seed-ebac-kickoff-cards.ts",
     "test": "vitest run"
   },
   "prisma": {
