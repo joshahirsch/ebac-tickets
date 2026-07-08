@@ -2,6 +2,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { format, formatDistanceToNow } from "date-fns";
 import { dueDateInputValue, formatDateOnlyLong } from "@/lib/date/date-only";
+import {
+  buildGoogleCalendarUrl,
+  ticketDetailUrl,
+} from "@/lib/calendar/google-calendar-url";
 import { ArrowLeft, Paperclip } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { can, canArchiveTickets, isReadOnly } from "@/lib/rbac";
@@ -22,6 +26,7 @@ import { CommentForm } from "@/components/ticket/comment-form";
 import { CommentItem } from "@/components/ticket/comment-item";
 import { ArchiveButton } from "@/components/ticket/archive-button";
 import { AttachmentsSection } from "@/components/ticket/attachments-section";
+import { AddToGoogleCalendarLink } from "@/components/calendar/add-to-google-calendar-link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -214,6 +219,19 @@ export default async function TicketDetailPage({ params }: { params: RouteParams
                   <span>{dueValue ? formatDateOnlyLong(dueValue) : "—"}</span>
                 )}
               </Field>
+              {dueValue ? (
+                <div className="flex justify-end">
+                  <AddToGoogleCalendarLink
+                    href={buildGoogleCalendarUrl({
+                      key: `${ticket.project.key}-${ticket.number}`,
+                      title: ticket.title,
+                      dueDate: dueValue,
+                      description: ticket.description,
+                      ticketUrl: ticketDetailUrl(ticket.id, process.env.NEXT_PUBLIC_APP_URL),
+                    })}
+                  />
+                </div>
+              ) : null}
             </CardContent>
           </Card>
 

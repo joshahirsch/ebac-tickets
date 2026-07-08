@@ -143,6 +143,18 @@ describe("TicketDetailPage", () => {
 
     expect(html).toContain('value="2026-07-13"');
     expect(html).not.toContain('value="2026-07-12"');
+    expect(html).toContain("Add to Google Calendar");
+    expect(html).toContain("calendar.google.com/calendar/render");
+    expect(html).toContain("20260713");
+  });
+
+  it("hides Add to Google Calendar when the ticket has no due date", async () => {
+    vi.mocked(getTicketById).mockResolvedValue(pmgtTicket as never);
+    const page = await TicketDetailPage({
+      params: Promise.resolve({ id: pmgtTicket.id }),
+    });
+    const html = renderToStaticMarkup(page);
+    expect(html).not.toContain("Add to Google Calendar");
   });
 
   it("renders comment URLs as links and shows edited state", async () => {

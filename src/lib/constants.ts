@@ -74,6 +74,7 @@ export const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: "LayoutDashboard" },
   { href: "/tickets", label: "Tickets", icon: "Ticket" },
   { href: "/board", label: "Board", icon: "Columns3" },
+  { href: "/calendar", label: "Calendar", icon: "CalendarDays" },
   { href: "/projects", label: "Projects", icon: "FolderKanban" },
   { href: "/my-work", label: "My Work", icon: "CircleUser" },
   { href: "/notifications", label: "Notifications", icon: "Bell" },

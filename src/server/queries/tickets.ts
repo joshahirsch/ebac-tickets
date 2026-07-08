@@ -2,7 +2,14 @@ import "server-only";
 import type { Prisma, TicketStatus, TicketPriority, TicketType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { OPEN_STATUSES } from "@/lib/constants";
-import { dueThisWeekRange, overdueBefore } from "@/lib/date/date-only";
+import {
+  dateOnlyToUtcEnd,
+  dateOnlyToUtcStart,
+  dueThisWeekRange,
+  overdueBefore,
+  type YearMonth,
+} from "@/lib/date/date-only";
+import { monthGridDateRange } from "@/lib/calendar/month-grid";
 import { normalizeSortParam, type TicketListParams } from "@/lib/ticket-list-search-params";
 
 export type { TicketListParams };
@@ -118,6 +125,40 @@ export async function getTicketsList(
 }
 
 export type TicketListItem = Awaited<ReturnType<typeof getTicketsList>>[number];
+
+/** Due-dated tickets for the Calendar month grid (includes adjacent padding days). */
+export async function getCalendarTickets(
+  workspaceId: string | null,
+  currentUserId: string,
+  params: TicketListParams,
+  yearMonth: YearMonth,
+) {
+  const baseWhere = buildTicketWhere(workspaceId, params, currentUserId);
+  const { start, end } = monthGridDateRange(yearMonth);
+
+  return prisma.ticket.findMany({
+    where: {
+      AND: [
+        baseWhere,
+        { dueDate: { not: null } },
+        {
+          dueDate: {
+            gte: dateOnlyToUtcStart(start),
+            lte: dateOnlyToUtcEnd(end),
+          },
+        },
+      ],
+    },
+    orderBy: [{ dueDate: "asc" }, { priority: "desc" }],
+    take: 500,
+    include: {
+      project: { select: { key: true, name: true } },
+      assignee: { select: { id: true, name: true, email: true } },
+    },
+  });
+}
+
+export type CalendarTicketItem = Awaited<ReturnType<typeof getCalendarTickets>>[number];
 
 export async function getTicketById(id: string, workspaceId: string | null) {
   const ticketId = id?.trim();

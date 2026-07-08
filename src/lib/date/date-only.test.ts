@@ -1,17 +1,22 @@
 import { describe, expect, it } from "vitest";
 import {
   addDaysToDateOnly,
+  dateOnlyToGoogleAllDay,
   dueDateInputValue,
   dueDatesEqual,
   dueThisWeekRange,
+  endOfMonthDateOnly,
   formatDateOnlyCompact,
   formatDateOnlyLong,
   formatDueDate,
   isDateOnlyPast,
+  nextDateOnly,
   overdueBefore,
   parseFormDateOnly,
+  startOfMonthDateOnly,
   toDateOnly,
   todayDateOnlyUtc,
+  toYearMonth,
 } from "./date-only";
 
 describe("toDateOnly", () => {
@@ -78,6 +83,10 @@ describe("filter boundaries", () => {
 });
 
 describe("PMGT kickoff due dates", () => {
+  it("keeps seeded kickoff nights on the intended calendar day", () => {
+    expect(toDateOnly(parseFormDateOnly("2026-07-13"))).toBe("2026-07-13");
+  });
+
   it("keeps PMGT-2 due date stable across display and input helpers", () => {
     const stored = parseFormDateOnly("2026-07-12");
     expect(formatDueDate(stored)).toBe("Jul 12");
@@ -87,5 +96,15 @@ describe("PMGT kickoff due dates", () => {
   it("keeps Jul 13 kickoff cards stable across midnight and noon storage", () => {
     expect(formatDueDate("2026-07-13T00:00:00.000Z")).toBe("Jul 13");
     expect(dueDateInputValue("2026-07-13T12:00:00.000Z")).toBe("2026-07-13");
+  });
+});
+
+describe("year-month and Google all-day helpers", () => {
+  it("derives month bounds without local timezone drift", () => {
+    expect(toYearMonth("2026-07-13")).toBe("2026-07");
+    expect(startOfMonthDateOnly("2026-07")).toBe("2026-07-01");
+    expect(endOfMonthDateOnly("2026-02")).toBe("2026-02-28");
+    expect(dateOnlyToGoogleAllDay("2026-07-13")).toBe("20260713");
+    expect(nextDateOnly("2026-07-13")).toBe("2026-07-14");
   });
 });
