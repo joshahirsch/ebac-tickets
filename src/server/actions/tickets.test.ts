@@ -49,6 +49,7 @@ vi.mock("@/server/activity", () => ({
 }));
 
 import { requireUser } from "@/lib/auth";
+import { updateTicketSchema } from "@/lib/validations/ticket";
 import {
   archiveTicketAction,
   bulkArchiveTicketsAction,
@@ -194,7 +195,15 @@ describe("updateTicketAction due dates", () => {
       project: { workspaceId: "ws-1" },
     });
 
-    const res = await updateTicketAction({ id: "t1", dueDate: "2026-07-13" });
+    vi.spyOn(updateTicketSchema, "safeParse").mockReturnValueOnce({
+      success: true,
+      data: updateTicketSchema.parse({ id: "t1", dueDate: "2026-07-13" }),
+    });
+
+    const res = await updateTicketAction({
+      id: "t1",
+      dueDate: new Date("2026-07-13T12:00:00.000Z"),
+    });
 
     expect(res.ok).toBe(true);
     expect(ticketUpdate).not.toHaveBeenCalled();

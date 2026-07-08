@@ -1,12 +1,18 @@
 import "server-only";
+import { parseGoogleApiErrorBody } from "./sync-errors";
 import { GoogleCalendarApiError, type GoogleCalendarApi } from "./types";
 
-async function parseError(res: Response): Promise<string> {
+async function parseError(res: Response): Promise<GoogleCalendarApiError> {
+  const fallback = res.statusText || "Google Calendar API error";
   try {
-    const data = (await res.json()) as { error?: { message?: string } };
-    return data.error?.message ?? res.statusText;
+    const body = await res.json();
+    const parsed = parseGoogleApiErrorBody(body, res.status, fallback);
+    return new GoogleCalendarApiError(parsed.message, parsed.status, {
+      code: parsed.code,
+      reason: parsed.reason,
+    });
   } catch {
-    return res.statusText || "Google Calendar API error";
+    return new GoogleCalendarApiError(fallback, res.status, { code: res.status });
   }
 }
 
@@ -25,10 +31,14 @@ export function createGoogleCalendarClient(fetchImpl: typeof fetch = fetch): Goo
         },
       );
       if (!res.ok) {
-        throw new GoogleCalendarApiError(await parseError(res), res.status);
+        throw await parseError(res);
       }
       const data = (await res.json()) as { id?: string };
-      if (!data.id) throw new GoogleCalendarApiError("Google did not return an event id.", res.status);
+      if (!data.id) {
+        throw new GoogleCalendarApiError("Google did not return an event id.", res.status, {
+          code: res.status,
+        });
+      }
       return { id: data.id };
     },
 
@@ -45,7 +55,7 @@ export function createGoogleCalendarClient(fetchImpl: typeof fetch = fetch): Goo
         },
       );
       if (!res.ok) {
-        throw new GoogleCalendarApiError(await parseError(res), res.status);
+        throw await parseError(res);
       }
       const data = (await res.json()) as { id?: string };
       return { id: data.id ?? eventId };
@@ -62,7 +72,7 @@ export function createGoogleCalendarClient(fetchImpl: typeof fetch = fetch): Goo
       // 404/410 = already gone; treat as success.
       if (res.status === 404 || res.status === 410) return;
       if (!res.ok && res.status !== 204) {
-        throw new GoogleCalendarApiError(await parseError(res), res.status);
+        throw await parseError(res);
       }
     },
   };

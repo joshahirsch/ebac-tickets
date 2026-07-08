@@ -50,6 +50,8 @@ export type SyncSummary = {
   errors: number;
 };
 
+export type { SyncResultStatus, SyncTicketFailure } from "./sync-errors";
+
 export type GoogleCalendarApi = {
   createEvent: (
     calendarId: string,
@@ -78,9 +80,18 @@ export class GoogleCalendarConfigError extends Error {
 
 export class GoogleCalendarApiError extends Error {
   status: number;
-  constructor(message: string, status: number) {
+  code: number | null;
+  reason: string | null;
+
+  constructor(
+    message: string,
+    status: number,
+    options?: { code?: number | null; reason?: string | null },
+  ) {
     super(message);
     this.name = "GoogleCalendarApiError";
     this.status = status;
+    this.code = options?.code ?? null;
+    this.reason = options?.reason ?? null;
   }
 }

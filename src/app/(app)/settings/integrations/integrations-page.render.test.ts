@@ -19,6 +19,7 @@ import { requireUser } from "@/lib/auth";
 import { getGoogleCalendarConnectionView } from "@/server/queries/google-calendar";
 import IntegrationsSettingsPage from "@/app/(app)/settings/integrations/page";
 import { SettingsNav } from "@/components/settings/settings-nav";
+import { GoogleCalendarIntegrationCard } from "@/components/settings/google-calendar-integration-card";
 
 const memberUser = {
   id: "member-1",
@@ -49,6 +50,7 @@ describe("IntegrationsSettingsPage Google Calendar card", () => {
       lastSyncAt: null,
       lastSyncStatus: null,
       lastSyncError: null,
+      lastSyncErrorDetails: null,
     });
 
     const page = await IntegrationsSettingsPage({
@@ -68,8 +70,9 @@ describe("IntegrationsSettingsPage Google Calendar card", () => {
       googleAccountEmail: "josh@gmail.com",
       calendarId: "primary",
       lastSyncAt: new Date("2026-07-08T12:00:00.000Z"),
-      lastSyncStatus: "OK: 1 created, 0 updated, 0 deleted, 0 skipped",
+      lastSyncStatus: "SUCCESS: 1 created, 0 updated, 0 deleted, 0 skipped, 0 errors",
       lastSyncError: null,
+      lastSyncErrorDetails: null,
     });
 
     const page = await IntegrationsSettingsPage({
@@ -80,6 +83,69 @@ describe("IntegrationsSettingsPage Google Calendar card", () => {
     expect(html).toContain("Primary calendar");
     expect(html).toContain("Sync now");
     expect(html).toContain("Disconnect");
+  });
+
+  it("renders PARTIAL sync result styling and expandable failure details", () => {
+    const html = renderToStaticMarkup(
+      createElement(GoogleCalendarIntegrationCard, {
+        connection: {
+          configured: true,
+          connected: true,
+          status: "CONNECTED",
+          googleAccountEmail: "josh@gmail.com",
+          calendarId: "primary",
+          lastSyncAt: new Date("2026-07-08T12:00:00.000Z"),
+          lastSyncStatus:
+            "PARTIAL: 0 created, 0 updated, 0 deleted, 0 skipped, 14 errors",
+          lastSyncError: null,
+          lastSyncErrorDetails: {
+            summary: "14 ticket(s) failed to sync.",
+            reconnectRequired: true,
+            failures: [
+              {
+                ticketId: "t-1",
+                ticketKey: "PMGT-2",
+                title: "Example ticket",
+                operation: "create",
+                status: 403,
+                code: "403",
+                reason: "insufficientPermissions",
+                message: "Insufficient Permission",
+                category: "oauth_scope",
+              },
+            ],
+          },
+        },
+      }),
+    );
+
+    expect(html).toContain("text-amber-700");
+    expect(html).toContain("PARTIAL: 0 created, 0 updated, 0 deleted, 0 skipped, 14 errors");
+    expect(html).toContain("14 ticket(s) failed to sync.");
+    expect(html).toContain("Show sync failure details (1)");
+    expect(html).toContain("PMGT-2: Example ticket");
+    expect(html).toContain("Reconnect");
+  });
+
+  it("renders SUCCESS last result styling", () => {
+    const html = renderToStaticMarkup(
+      createElement(GoogleCalendarIntegrationCard, {
+        connection: {
+          configured: true,
+          connected: true,
+          status: "CONNECTED",
+          googleAccountEmail: "josh@gmail.com",
+          calendarId: "primary",
+          lastSyncAt: new Date("2026-07-08T12:00:00.000Z"),
+          lastSyncStatus: "SUCCESS: 2 created, 0 updated, 0 deleted, 0 skipped, 0 errors",
+          lastSyncError: null,
+          lastSyncErrorDetails: null,
+        },
+      }),
+    );
+
+    expect(html).toContain("text-green-700");
+    expect(html).toContain("SUCCESS: 2 created, 0 updated, 0 deleted, 0 skipped, 0 errors");
   });
 });
 

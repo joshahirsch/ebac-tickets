@@ -11,27 +11,22 @@ export async function POST(_request: NextRequest) {
   }
 
   const result = await syncUserGoogleCalendar(user);
-  if (!result.ok) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: result.error ?? "Sync failed.",
-        created: result.created,
-        updated: result.updated,
-        deleted: result.deleted,
-        skipped: result.skipped,
-        errors: result.errors,
-      },
-      { status: 400 },
-    );
-  }
-
-  return NextResponse.json({
-    ok: true,
+  const body = {
+    ok: result.ok,
+    status: result.status,
     created: result.created,
     updated: result.updated,
     deleted: result.deleted,
     skipped: result.skipped,
     errors: result.errors,
-  });
+    failures: result.failures,
+    reconnectRequired: result.reconnectRequired ?? false,
+    error: result.error,
+  };
+
+  if (!result.ok) {
+    return NextResponse.json(body, { status: 400 });
+  }
+
+  return NextResponse.json(body);
 }

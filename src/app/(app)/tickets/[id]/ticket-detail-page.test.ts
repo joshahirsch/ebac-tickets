@@ -100,6 +100,7 @@ describe("TicketDetailPage", () => {
       lastSyncAt: null,
       lastSyncStatus: null,
       lastSyncError: null,
+      lastSyncErrorDetails: null,
     });
     vi.mocked(getTicketCalendarSyncForUser).mockResolvedValue(null);
   });

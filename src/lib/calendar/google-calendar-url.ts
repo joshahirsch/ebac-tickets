@@ -44,7 +44,26 @@ export function buildGoogleCalendarUrl(ticket: GoogleCalendarTicketEvent): strin
   return `https://calendar.google.com/calendar/render?${params.toString()}`;
 }
 
+export function normalizeAppBaseUrl(appUrl?: string | null): string {
+  const trimmed = (appUrl ?? "").trim().replace(/\/$/, "");
+  if (!trimmed) return "http://localhost:3000";
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  if (!/^[a-z][a-z0-9+.-]*:/i.test(trimmed)) {
+    return `https://${trimmed}`;
+  }
+  return "http://localhost:3000";
+}
+
+export function isValidHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 export function ticketDetailUrl(ticketId: string, appUrl = process.env.NEXT_PUBLIC_APP_URL): string {
-  const base = (appUrl ?? "").replace(/\/$/, "") || "http://localhost:3000";
+  const base = normalizeAppBaseUrl(appUrl);
   return `${base}/tickets/${ticketId}`;
 }

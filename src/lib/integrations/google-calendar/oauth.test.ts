@@ -11,6 +11,7 @@ import {
   mapTicketToGoogleEvent,
 } from "./event-mapper";
 import { syncUserGoogleCalendar, type SyncDeps } from "./sync";
+import { GoogleCalendarApiError } from "./types";
 import type { GoogleCalendarConnection, TicketCalendarSync } from "@prisma/client";
 import type { SyncableTicket } from "./types";
 
@@ -91,9 +92,22 @@ describe("event mapper", () => {
     expect(event.end.date).toBe("2026-07-14");
     expect(event.summary).toBe("[PMGT-2] Build EBAC stakeholder map");
     expect(event.transparency).toBe("transparent");
+    expect(event.source?.url).toBe("https://tickets.example.com/tickets/t-1");
     expect(event.description).toContain("Ticket: PMGT-2");
     expect(event.description).toContain("https://tickets.example.com/tickets/t-1");
     expect(event.extendedProperties?.private?.ebacTicketId).toBe("t-1");
+  });
+
+  it("falls back to localhost when app URL uses an unsupported scheme", () => {
+    const ticket = makeTicket();
+    const { event } = mapTicketToGoogleEvent(ticket, { appUrl: "ftp://files.example.com" });
+    expect(event.source?.url).toBe("http://localhost:3000/tickets/t-1");
+  });
+
+  it("uses https for bare host app URLs so Google source.url stays valid", () => {
+    const ticket = makeTicket();
+    const { event } = mapTicketToGoogleEvent(ticket, { appUrl: "tickets.example.com" });
+    expect(event.source?.url).toBe("https://tickets.example.com/tickets/t-1");
   });
 
   it("excludes unassigned, other-assignee, archived, done, and no-due-date tickets", () => {
@@ -149,9 +163,15 @@ describe("syncUserGoogleCalendar", () => {
 
     const result = await syncUserGoogleCalendar({ id: "user-1", workspaceId: "ws-1" }, deps);
     expect(result.ok).toBe(true);
+    expect(result.status).toBe("SUCCESS");
     expect(result.created).toBe(1);
+    expect(result.failures).toEqual([]);
     expect(api.createEvent).toHaveBeenCalledOnce();
-    const [, event] = api.createEvent.mock.calls[0]!;
+    const event = (vi.mocked(api.createEvent).mock.calls[0] as unknown as [
+      string,
+      import("./types").GoogleCalendarEventPayload,
+      string,
+    ])[1];
     expect(event.start.date).toBe("2026-07-13");
     expect(event.end.date).toBe("2026-07-14");
     expect(deps.upsertSyncRow).toHaveBeenCalled();
@@ -227,8 +247,117 @@ describe("syncUserGoogleCalendar", () => {
 
     const result = await syncUserGoogleCalendar({ id: "user-1", workspaceId: "ws-1" }, deps);
     expect(result.ok).toBe(false);
+    expect(result.status).toBe("ERROR");
     expect(result.error).toMatch(/not connected/i);
     expect(api.createEvent).not.toHaveBeenCalled();
+  });
+
+  it("captures sanitized per-ticket failures for partial sync", async () => {
+    const api = mockApi();
+    api.createEvent.mockRejectedValueOnce(
+      new GoogleCalendarApiError("Invalid source url", 400, {
+        code: 400,
+        reason: "invalid",
+      }),
+    );
+    const deps = baseDeps(api, {
+      tickets: [makeTicket()],
+      syncs: [],
+    });
+
+    const result = await syncUserGoogleCalendar({ id: "user-1", workspaceId: "ws-1" }, deps);
+    expect(result.status).toBe("ERROR");
+    expect(result.errors).toBe(1);
+    expect(result.failures).toHaveLength(1);
+    expect(result.failures[0]).toMatchObject({
+      ticketKey: "PMGT-2",
+      operation: "create",
+      category: "event_payload",
+      message: "Invalid source url",
+    });
+    expect(deps.upsertSyncRow).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "ERROR", googleEventId: "" }),
+    );
+  });
+
+  it("returns ERROR for systemic failures across all tickets", async () => {
+    const api = mockApi();
+    api.createEvent.mockRejectedValue(
+      new GoogleCalendarApiError("Insufficient Permission", 403, {
+        code: 403,
+        reason: "insufficientPermissions",
+      }),
+    );
+    const tickets = Array.from({ length: 14 }, (_, index) =>
+      makeTicket({ id: `t-${index + 1}`, number: index + 1 }),
+    );
+    const deps = baseDeps(api, { tickets, syncs: [] });
+
+    const result = await syncUserGoogleCalendar({ id: "user-1", workspaceId: "ws-1" }, deps);
+    expect(result.status).toBe("ERROR");
+    expect(result.errors).toBe(14);
+    expect(result.created).toBe(0);
+    expect(result.failures).toHaveLength(14);
+    expect(result.reconnectRequired).toBe(true);
+    expect(deps.updateConnectionSyncMeta).toHaveBeenCalledWith(
+      "conn-1",
+      expect.objectContaining({
+        lastSyncStatus: "ERROR: 0 created, 0 updated, 0 deleted, 0 skipped, 14 errors",
+      }),
+    );
+  });
+
+  it("recreates events when update returns 404", async () => {
+    const api = mockApi();
+    api.updateEvent.mockRejectedValueOnce(
+      new GoogleCalendarApiError("Not Found", 404, { code: 404, reason: "notFound" }),
+    );
+    api.createEvent.mockResolvedValueOnce({ id: "evt-recreated" });
+    const ticket = makeTicket();
+    const { contentHash } = mapTicketToGoogleEvent(ticket, { appUrl: "http://localhost:3000" });
+    const deps = baseDeps(api, {
+      tickets: [ticket],
+      syncs: [makeSync({ lastSyncedHash: "stale-hash", googleEventId: "missing-event" })],
+    });
+    deps.loadActiveSyncs = async () => [
+      makeSync({ lastSyncedHash: "stale-hash", googleEventId: "missing-event", status: "SYNCED" }),
+    ];
+
+    const result = await syncUserGoogleCalendar({ id: "user-1", workspaceId: "ws-1" }, deps);
+    expect(result.created).toBe(1);
+    expect(api.updateEvent).toHaveBeenCalledOnce();
+    expect(api.createEvent).toHaveBeenCalledOnce();
+    expect(deps.upsertSyncRow).toHaveBeenCalledWith(
+      expect.objectContaining({ googleEventId: "evt-recreated", status: "SYNCED" }),
+    );
+    expect(contentHash).toBeTruthy();
+  });
+
+  it("requires reconnect when stored scope lacks calendar write access", async () => {
+    const api = mockApi();
+    const deps = baseDeps(api, { tickets: [makeTicket()], syncs: [] });
+    deps.loadConnection = async () =>
+      makeConnection({ scope: "openid email profile" });
+
+    const result = await syncUserGoogleCalendar({ id: "user-1", workspaceId: "ws-1" }, deps);
+    expect(result.ok).toBe(false);
+    expect(result.reconnectRequired).toBe(true);
+    expect(result.error).toMatch(/reconnect/i);
+    expect(api.createEvent).not.toHaveBeenCalled();
+  });
+
+  it("retries create for prior ERROR rows without a Google event id", async () => {
+    const api = mockApi();
+    const ticket = makeTicket();
+    const deps = baseDeps(api, {
+      tickets: [ticket],
+      syncs: [makeSync({ googleEventId: "", status: "ERROR", lastError: "Previous failure" })],
+    });
+
+    const result = await syncUserGoogleCalendar({ id: "user-1", workspaceId: "ws-1" }, deps);
+    expect(result.created).toBe(1);
+    expect(api.createEvent).toHaveBeenCalledOnce();
+    expect(api.updateEvent).not.toHaveBeenCalled();
   });
 });
 

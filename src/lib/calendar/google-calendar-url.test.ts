@@ -43,4 +43,10 @@ describe("ticketDetailUrl", () => {
       "https://app.example.com/tickets/abc",
     );
   });
+
+  it("adds https when app URL omits protocol", () => {
+    expect(ticketDetailUrl("abc", "tickets.example.com")).toBe(
+      "https://tickets.example.com/tickets/abc",
+    );
+  });
 });

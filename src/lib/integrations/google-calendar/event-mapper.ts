@@ -3,10 +3,12 @@ import {
   toDateOnly,
   type DateOnly,
 } from "@/lib/date/date-only";
-import { ticketDetailUrl } from "@/lib/calendar/google-calendar-url";
+import { isValidHttpUrl, ticketDetailUrl } from "@/lib/calendar/google-calendar-url";
 import { TICKET_PRIORITY_META, TICKET_STATUS_META } from "@/lib/constants";
 import { hashSyncPayload } from "./tokens";
 import type { GoogleCalendarEventPayload, SyncableTicket } from "./types";
+
+const GOOGLE_EVENT_SUMMARY_MAX = 1024;
 
 export function googleAllDayRange(dueDate: DateOnly): { start: DateOnly; end: DateOnly } {
   return {
@@ -33,6 +35,11 @@ export function buildEventDescription(ticket: SyncableTicket, ticketUrl: string)
   ].join("\n");
 }
 
+function truncateSummary(summary: string): string {
+  if (summary.length <= GOOGLE_EVENT_SUMMARY_MAX) return summary;
+  return `${summary.slice(0, GOOGLE_EVENT_SUMMARY_MAX - 1).trimEnd()}…`;
+}
+
 export function mapTicketToGoogleEvent(
   ticket: SyncableTicket,
   options?: { appUrl?: string },
@@ -48,12 +55,11 @@ export function mapTicketToGoogleEvent(
   const description = buildEventDescription(ticket, ticketUrl);
 
   const event: GoogleCalendarEventPayload = {
-    summary: `[${key}] ${ticket.title}`,
+    summary: truncateSummary(`[${key}] ${ticket.title}`),
     description,
     start: { date: start },
     end: { date: end },
     transparency: "transparent",
-    source: { title: "EBAC Projects", url: ticketUrl },
     extendedProperties: {
       private: {
         ebacTicketId: ticket.id,
@@ -61,6 +67,10 @@ export function mapTicketToGoogleEvent(
       },
     },
   };
+
+  if (isValidHttpUrl(ticketUrl)) {
+    event.source = { title: "EBAC Projects", url: ticketUrl };
+  }
 
   const contentHash = hashSyncPayload({
     ticketId: ticket.id,

@@ -3,8 +3,18 @@ import { prisma } from "@/lib/prisma";
 import { createGoogleCalendarClient } from "./client";
 import { isTicketEligibleForPersonalSync, mapTicketToGoogleEvent } from "./event-mapper";
 import { getGoogleOAuthConfig, refreshAccessToken } from "./oauth";
+import {
+  buildTicketFailure,
+  formatSyncStatusLabel,
+  hasCalendarWriteScope,
+  missingCalendarScopeMessage,
+  resolveSyncResultStatus,
+  serializeSyncFailures,
+  type SyncResultStatus,
+  type SyncTicketFailure,
+} from "./sync-errors";
 import { decryptSecret, encryptSecret } from "./tokens";
-import type { GoogleCalendarApi, SyncableTicket, SyncSummary } from "./types";
+import { GoogleCalendarApiError, type GoogleCalendarApi, type SyncableTicket, type SyncSummary } from "./types";
 
 export type ConnectionWithTokens = GoogleCalendarConnection;
 
@@ -56,6 +66,14 @@ export type SyncDeps = {
 
 const REFRESH_SKEW_MS = 60_000;
 
+export type SyncUserGoogleCalendarResult = SyncSummary & {
+  ok: boolean;
+  status: SyncResultStatus;
+  error?: string;
+  failures: SyncTicketFailure[];
+  reconnectRequired?: boolean;
+};
+
 export async function ensureAccessToken(
   connection: GoogleCalendarConnection,
   deps: Pick<SyncDeps, "refreshTokens" | "updateConnectionTokens" | "now">,
@@ -102,18 +120,84 @@ function emptySummary(): SyncSummary {
   return { created: 0, updated: 0, deleted: 0, skipped: 0, errors: 0 };
 }
 
+function ticketKey(ticket: SyncableTicket): string {
+  return `${ticket.project.key}-${ticket.number}`;
+}
+
+function hasMappedGoogleEvent(sync: TicketCalendarSync | undefined): sync is TicketCalendarSync {
+  return Boolean(sync?.googleEventId?.trim());
+}
+
+async function recordTicketFailure(
+  resolved: SyncDeps,
+  params: {
+    user: Pick<User, "id">;
+    ticket: SyncableTicket;
+    connection: GoogleCalendarConnection;
+    calendarId: string;
+    operation: SyncTicketFailure["operation"];
+    err: unknown;
+    existing?: TicketCalendarSync;
+    dueDateOnly?: string;
+    contentHash?: string;
+  },
+): Promise<SyncTicketFailure> {
+  const failure = buildTicketFailure({
+    ticketId: params.ticket.id,
+    ticketKey: ticketKey(params.ticket),
+    title: params.ticket.title,
+    operation: params.operation,
+    err: params.err,
+  });
+
+  await resolved.upsertSyncRow({
+    userId: params.user.id,
+    ticketId: params.ticket.id,
+    calendarConnectionId: params.connection.id,
+    googleCalendarId: params.calendarId,
+    googleEventId: params.existing?.googleEventId?.trim() || "",
+    lastSyncedDueDate: params.dueDateOnly ?? params.existing?.lastSyncedDueDate ?? "",
+    lastSyncedHash: params.contentHash ?? params.existing?.lastSyncedHash ?? "",
+    status: "ERROR",
+    lastError: failure.message,
+  });
+
+  return failure;
+}
+
 export async function syncUserGoogleCalendar(
   user: Pick<User, "id" | "workspaceId">,
   deps?: Partial<SyncDeps>,
-): Promise<SyncSummary & { ok: boolean; error?: string }> {
+): Promise<SyncUserGoogleCalendarResult> {
   const resolved = resolveDeps(deps);
   const connection = await resolved.loadConnection(user.id);
+  const failures: SyncTicketFailure[] = [];
 
   if (!connection || (connection.status !== "CONNECTED" && connection.status !== "ERROR")) {
     return {
       ...emptySummary(),
       ok: false,
+      status: "ERROR",
       error: "Google Calendar is not connected.",
+      failures,
+    };
+  }
+
+  if (!hasCalendarWriteScope(connection.scope)) {
+    const message = missingCalendarScopeMessage();
+    await resolved.updateConnectionSyncMeta(connection.id, {
+      lastSyncAt: new Date(),
+      lastSyncStatus: "ERROR: 0 created, 0 updated, 0 deleted, 0 skipped, 0 errors",
+      lastSyncError: message,
+      status: "ERROR",
+    });
+    return {
+      ...emptySummary(),
+      ok: false,
+      status: "ERROR",
+      error: message,
+      failures,
+      reconnectRequired: true,
     };
   }
 
@@ -124,15 +208,39 @@ export async function syncUserGoogleCalendar(
     const message = err instanceof Error ? err.message : "Token refresh failed.";
     await resolved.updateConnectionSyncMeta(connection.id, {
       lastSyncAt: new Date(),
-      lastSyncStatus: "ERROR",
+      lastSyncStatus: "ERROR: 0 created, 0 updated, 0 deleted, 0 skipped, 0 errors",
       lastSyncError: message,
       status: "ERROR",
     });
-    return { ...emptySummary(), ok: false, error: message };
+    return {
+      ...emptySummary(),
+      ok: false,
+      status: "ERROR",
+      error: message,
+      failures,
+      reconnectRequired: true,
+    };
   }
 
-  // Reload connection after possible token update so calendarId is current.
   const fresh = (await resolved.loadConnection(user.id)) ?? connection;
+  if (!hasCalendarWriteScope(fresh.scope)) {
+    const message = missingCalendarScopeMessage();
+    await resolved.updateConnectionSyncMeta(fresh.id, {
+      lastSyncAt: new Date(),
+      lastSyncStatus: "ERROR: 0 created, 0 updated, 0 deleted, 0 skipped, 0 errors",
+      lastSyncError: message,
+      status: "ERROR",
+    });
+    return {
+      ...emptySummary(),
+      ok: false,
+      status: "ERROR",
+      error: message,
+      failures,
+      reconnectRequired: true,
+    };
+  }
+
   const calendarId = fresh.calendarId || "primary";
   const summary = emptySummary();
   const eligible = await resolved.loadEligibleTickets(user.id, user.workspaceId);
@@ -148,13 +256,39 @@ export async function syncUserGoogleCalendar(
       continue;
     }
 
+    const existing = syncByTicketId.get(ticket.id);
+    let mapped: ReturnType<typeof mapTicketToGoogleEvent>;
     try {
-      const { event, dueDateOnly, contentHash } = mapTicketToGoogleEvent(ticket, {
-        appUrl: resolved.appUrl,
-      });
-      const existing = syncByTicketId.get(ticket.id);
+      mapped = mapTicketToGoogleEvent(ticket, { appUrl: resolved.appUrl });
+    } catch (err) {
+      summary.errors += 1;
+      failures.push(
+        await recordTicketFailure(resolved, {
+          user,
+          ticket,
+          connection: fresh,
+          calendarId,
+          operation: hasMappedGoogleEvent(existing) ? "update" : "create",
+          err,
+          existing,
+        }),
+      );
+      continue;
+    }
 
-      if (!existing) {
+    const { event, dueDateOnly, contentHash } = mapped;
+
+    if (
+      hasMappedGoogleEvent(existing) &&
+      existing.lastSyncedHash === contentHash &&
+      existing.status === "SYNCED"
+    ) {
+      summary.skipped += 1;
+      continue;
+    }
+
+    try {
+      if (!hasMappedGoogleEvent(existing) || existing.status === "ERROR") {
         const created = await resolved.api.createEvent(calendarId, event, accessToken);
         await resolved.upsertSyncRow({
           userId: user.id,
@@ -171,31 +305,57 @@ export async function syncUserGoogleCalendar(
         continue;
       }
 
-      if (existing.lastSyncedHash === contentHash && existing.status === "SYNCED") {
-        summary.skipped += 1;
-        continue;
+      try {
+        await resolved.api.updateEvent(calendarId, existing.googleEventId, event, accessToken);
+        await resolved.upsertSyncRow({
+          userId: user.id,
+          ticketId: ticket.id,
+          calendarConnectionId: fresh.id,
+          googleCalendarId: calendarId,
+          googleEventId: existing.googleEventId,
+          lastSyncedDueDate: dueDateOnly,
+          lastSyncedHash: contentHash,
+          status: "SYNCED",
+          lastError: null,
+        });
+        summary.updated += 1;
+      } catch (err) {
+        if (
+          err instanceof GoogleCalendarApiError &&
+          (err.status === 404 || err.status === 410)
+        ) {
+          const created = await resolved.api.createEvent(calendarId, event, accessToken);
+          await resolved.upsertSyncRow({
+            userId: user.id,
+            ticketId: ticket.id,
+            calendarConnectionId: fresh.id,
+            googleCalendarId: calendarId,
+            googleEventId: created.id,
+            lastSyncedDueDate: dueDateOnly,
+            lastSyncedHash: contentHash,
+            status: "SYNCED",
+            lastError: null,
+          });
+          summary.created += 1;
+          continue;
+        }
+        throw err;
       }
-
-      await resolved.api.updateEvent(calendarId, existing.googleEventId, event, accessToken);
-      await resolved.upsertSyncRow({
-        userId: user.id,
-        ticketId: ticket.id,
-        calendarConnectionId: fresh.id,
-        googleCalendarId: calendarId,
-        googleEventId: existing.googleEventId,
-        lastSyncedDueDate: dueDateOnly,
-        lastSyncedHash: contentHash,
-        status: "SYNCED",
-        lastError: null,
-      });
-      summary.updated += 1;
     } catch (err) {
       summary.errors += 1;
-      const message = err instanceof Error ? err.message : "Sync failed.";
-      const existing = syncByTicketId.get(ticket.id);
-      if (existing) {
-        await resolved.markSyncError(existing.id, message);
-      }
+      failures.push(
+        await recordTicketFailure(resolved, {
+          user,
+          ticket,
+          connection: fresh,
+          calendarId,
+          operation: hasMappedGoogleEvent(existing) ? "update" : "create",
+          err,
+          existing,
+          dueDateOnly,
+          contentHash,
+        }),
+      );
     }
   }
 
@@ -204,29 +364,51 @@ export async function syncUserGoogleCalendar(
     if (eligibleIds.has(sync.ticketId)) continue;
 
     try {
-      await resolved.api.deleteEvent(calendarId, sync.googleEventId, accessToken);
+      if (sync.googleEventId?.trim()) {
+        await resolved.api.deleteEvent(calendarId, sync.googleEventId, accessToken);
+      }
       await resolved.markSyncDeleted(sync.id);
       summary.deleted += 1;
     } catch (err) {
       summary.errors += 1;
-      const message = err instanceof Error ? err.message : "Delete failed.";
+      const message =
+        err instanceof GoogleCalendarApiError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : "Delete failed.";
       await resolved.markSyncError(sync.id, message);
+      failures.push(
+        buildTicketFailure({
+          ticketId: sync.ticketId,
+          ticketKey: sync.ticketId,
+          title: "Removed ticket",
+          operation: "delete",
+          err,
+        }),
+      );
     }
   }
 
-  const statusLabel =
-    summary.errors > 0
-      ? `PARTIAL: ${summary.created} created, ${summary.updated} updated, ${summary.deleted} deleted, ${summary.skipped} skipped, ${summary.errors} errors`
-      : `OK: ${summary.created} created, ${summary.updated} updated, ${summary.deleted} deleted, ${summary.skipped} skipped`;
+  const status = resolveSyncResultStatus(summary, false);
+  const reconnectRequired = failures.some(
+    (failure) => failure.category === "oauth_scope" || failure.category === "token_refresh",
+  );
 
   await resolved.updateConnectionSyncMeta(fresh.id, {
     lastSyncAt: new Date(),
-    lastSyncStatus: statusLabel,
-    lastSyncError: summary.errors > 0 ? `${summary.errors} ticket(s) failed to sync.` : null,
-    status: "CONNECTED",
+    lastSyncStatus: formatSyncStatusLabel(status, summary),
+    lastSyncError: serializeSyncFailures(failures),
+    status: reconnectRequired ? "ERROR" : "CONNECTED",
   });
 
-  return { ...summary, ok: true };
+  return {
+    ...summary,
+    ok: status !== "ERROR",
+    status,
+    failures,
+    ...(reconnectRequired ? { reconnectRequired: true } : {}),
+  };
 }
 
 function resolveDeps(partial?: Partial<SyncDeps>): SyncDeps {

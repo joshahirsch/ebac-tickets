@@ -1,6 +1,10 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
 import { isGoogleCalendarConfigured } from "@/lib/integrations/google-calendar/oauth";
+import {
+  parsePersistedSyncError,
+  type PersistedSyncErrorDetails,
+} from "@/lib/integrations/google-calendar/sync-errors";
 
 export type GoogleCalendarConnectionView = {
   configured: boolean;
@@ -11,6 +15,7 @@ export type GoogleCalendarConnectionView = {
   lastSyncAt: Date | null;
   lastSyncStatus: string | null;
   lastSyncError: string | null;
+  lastSyncErrorDetails: PersistedSyncErrorDetails | null;
 };
 
 export async function getGoogleCalendarConnectionView(
@@ -31,6 +36,7 @@ export async function getGoogleCalendarConnectionView(
       lastSyncAt: null,
       lastSyncStatus: null,
       lastSyncError: null,
+      lastSyncErrorDetails: null,
     };
   }
 
@@ -43,6 +49,7 @@ export async function getGoogleCalendarConnectionView(
     lastSyncAt: connection.lastSyncAt,
     lastSyncStatus: connection.lastSyncStatus,
     lastSyncError: connection.lastSyncError,
+    lastSyncErrorDetails: parsePersistedSyncError(connection.lastSyncError),
   };
 }
 
