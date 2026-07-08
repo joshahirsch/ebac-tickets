@@ -52,17 +52,6 @@ export default async function TicketsPage({ searchParams }: { searchParams: SP }
   ]);
 
   const currentSort = searchParams.sort ?? "updatedAt:desc";
-  const [curField, curDir] = currentSort.split(":");
-
-  const sortHref = (field: string) => {
-    const next = new URLSearchParams();
-    Object.entries(searchParams).forEach(([k, v]) => {
-      if (v && k !== "sort") next.set(k, v);
-    });
-    const dir = curField === field && curDir === "asc" ? "desc" : "asc";
-    next.set("sort", `${field}:${dir}`);
-    return `/tickets?${next.toString()}`;
-  };
 
   return (
     <div className="mx-auto max-w-7xl space-y-4">
@@ -99,7 +88,6 @@ export default async function TicketsPage({ searchParams }: { searchParams: SP }
           labels: t.labels,
         }))}
         currentSort={currentSort}
-        sortHref={sortHref}
         canArchive={canArchive}
         viewingArchived={searchParams.status === "ARCHIVED"}
       />

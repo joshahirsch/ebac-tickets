@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { format, isPast } from "date-fns";
 import { Archive, ArrowDown, ArrowUp, RotateCcw } from "lucide-react";
 import type { TicketStatus, TicketPriority, TicketType } from "@prisma/client";
@@ -41,6 +41,19 @@ export type TicketTableItem = {
   assignee: { id: string; name: string | null; email: string } | null;
   labels: TicketLabel[];
 };
+
+function buildSortHref(
+  searchParams: URLSearchParams,
+  field: string,
+  currentSort: string,
+): string {
+  const next = new URLSearchParams(searchParams.toString());
+  const [curField, curDir] = (currentSort || "updatedAt:desc").split(":");
+  next.delete("sort");
+  const dir = curField === field && curDir === "asc" ? "desc" : "asc";
+  next.set("sort", `${field}:${dir}`);
+  return `/tickets?${next.toString()}`;
+}
 
 const COLUMNS: Array<{ field: string; label: string; sortable: boolean; className?: string }> = [
   { field: "title", label: "Title", sortable: true },
@@ -84,17 +97,20 @@ function TableToast({ toast, onDismiss }: { toast: Toast; onDismiss: () => void 
 export function TicketTable({
   tickets,
   currentSort,
-  sortHref,
   canArchive,
   viewingArchived,
 }: {
   tickets: TicketTableItem[];
   currentSort: string;
-  sortHref: (field: string) => string;
   canArchive: boolean;
   viewingArchived: boolean;
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const sortHref = useCallback(
+    (field: string) => buildSortHref(searchParams, field, currentSort),
+    [searchParams, currentSort],
+  );
   const [visibleTickets, setVisibleTickets] = useState(tickets);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [toast, setToast] = useState<Toast | null>(null);

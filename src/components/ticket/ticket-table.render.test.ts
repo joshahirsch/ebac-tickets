@@ -31,7 +31,6 @@ describe("TicketTable archive controls rendering", () => {
       createElement(TicketTable, {
         tickets: [sampleTicket],
         currentSort: "updatedAt:desc",
-        sortHref: () => "/tickets",
         canArchive: true,
         viewingArchived: false,
       }),
@@ -46,7 +45,6 @@ describe("TicketTable archive controls rendering", () => {
       createElement(TicketTable, {
         tickets: [sampleTicket],
         currentSort: "updatedAt:desc",
-        sortHref: () => "/tickets",
         canArchive: false,
         viewingArchived: false,
       }),
