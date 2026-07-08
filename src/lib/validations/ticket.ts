@@ -77,6 +77,12 @@ export const addCommentSchema = z.object({
   body: z.string().trim().min(1, "Comment can't be empty.").max(5000),
 });
 
+export const updateCommentSchema = z.object({
+  commentId: z.string().min(1),
+  body: z.string().trim().min(1, "Comment can't be empty.").max(5000),
+});
+
 export type CreateTicketInput = z.infer<typeof createTicketSchema>;
 export type UpdateTicketInput = z.infer<typeof updateTicketSchema>;
 export type AddCommentInput = z.infer<typeof addCommentSchema>;
+export type UpdateCommentInput = z.infer<typeof updateCommentSchema>;

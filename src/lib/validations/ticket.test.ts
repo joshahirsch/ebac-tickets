@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { createTicketSchema, updateTicketSchema, addCommentSchema } from "@/lib/validations/ticket";
+import { createTicketSchema, updateTicketSchema, addCommentSchema, updateCommentSchema } from "@/lib/validations/ticket";
 
 describe("createTicketSchema", () => {
   it("accepts a minimal valid ticket and applies defaults", () => {
@@ -55,5 +55,17 @@ describe("addCommentSchema", () => {
   });
   it("accepts a normal comment", () => {
     expect(addCommentSchema.safeParse({ ticketId: "t1", body: "Looks good" }).success).toBe(true);
+  });
+});
+
+describe("updateCommentSchema", () => {
+  it("rejects empty updates", () => {
+    expect(updateCommentSchema.safeParse({ commentId: "c1", body: "  " }).success).toBe(false);
+  });
+  it("accepts a valid update", () => {
+    expect(updateCommentSchema.safeParse({ commentId: "c1", body: "Revised" }).success).toBe(true);
+  });
+  it("requires a commentId", () => {
+    expect(updateCommentSchema.safeParse({ commentId: "", body: "Revised" }).success).toBe(false);
   });
 });

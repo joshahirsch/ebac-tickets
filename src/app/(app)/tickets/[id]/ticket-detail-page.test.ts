@@ -144,4 +144,35 @@ describe("TicketDetailPage", () => {
     expect(html).toContain('value="2026-07-13"');
     expect(html).not.toContain('value="2026-07-12"');
   });
+
+  it("renders comment URLs as links and shows edited state", async () => {
+    const driveUrl =
+      "https://drive.google.com/drive/folders/185HgPx9iB_bax5Bk3YgIWO4Qux1AdYyS?usp=drive_link";
+    vi.mocked(getTicketById).mockResolvedValue({
+      ...pmgtTicket,
+      comments: [
+        {
+          id: "c1",
+          body: driveUrl,
+          ticketId: pmgtTicket.id,
+          authorId: "josh-1",
+          isEdited: true,
+          createdAt: new Date("2026-06-02T00:00:00.000Z"),
+          updatedAt: new Date("2026-06-03T00:00:00.000Z"),
+          author: { id: "josh-1", name: "Josh Hirsch", email: "josh.hirsch@gmail.com" },
+        },
+      ],
+    } as never);
+
+    const page = await TicketDetailPage({
+      params: Promise.resolve({ id: pmgtTicket.id }),
+    });
+    const html = renderToStaticMarkup(page);
+
+    expect(html).toContain(`href="${driveUrl}"`);
+    expect(html).toContain('target="_blank"');
+    expect(html).toContain('rel="noopener noreferrer"');
+    expect(html).toContain("(edited)");
+    expect(html).toContain('aria-label="Edit comment"');
+  });
 });

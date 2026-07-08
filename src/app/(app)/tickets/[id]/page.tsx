@@ -7,7 +7,6 @@ import { requireUser } from "@/lib/auth";
 import { can, canArchiveTickets, isReadOnly } from "@/lib/rbac";
 import { getTicketById } from "@/server/queries/tickets";
 import { getAssignableUsers } from "@/server/queries/lookups";
-import { initials } from "@/lib/utils";
 import { StatusBadge } from "@/components/status-badge";
 import { PriorityBadge } from "@/components/priority-badge";
 import { TypeBadge } from "@/components/type-badge";
@@ -20,9 +19,9 @@ import {
 } from "@/components/ticket/ticket-editors";
 import { TitleEditor, DescriptionEditor } from "@/components/ticket/ticket-content-editors";
 import { CommentForm } from "@/components/ticket/comment-form";
+import { CommentItem } from "@/components/ticket/comment-item";
 import { ArchiveButton } from "@/components/ticket/archive-button";
 import { AttachmentsSection } from "@/components/ticket/attachments-section";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
@@ -104,26 +103,18 @@ export default async function TicketDetailPage({ params }: { params: RouteParams
                     <p className="text-sm text-muted-foreground">No comments yet.</p>
                   ) : (
                     <ul className="space-y-4">
-                      {ticket.comments.map((c) => (
-                        <li key={c.id} className="flex gap-3">
-                          <Avatar className="h-7 w-7">
-                            <AvatarFallback>
-                              {initials(c.author?.name ?? c.author?.email ?? "?")}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-baseline gap-2">
-                              <span className="text-sm font-medium">
-                                {c.author?.name ?? c.author?.email ?? "Unknown"}
-                              </span>
-                              <span className="text-xs text-muted-foreground">
-                                {formatDistanceToNow(c.createdAt, { addSuffix: true })}
-                              </span>
-                            </div>
-                            <p className="whitespace-pre-wrap text-sm">{c.body}</p>
-                          </div>
-                        </li>
-                      ))}
+                      {ticket.comments.map((c) => {
+                        const canEditComment =
+                          canComment &&
+                          (c.authorId === user.id || canArchive);
+                        return (
+                          <CommentItem
+                            key={c.id}
+                            comment={c}
+                            canEdit={canEditComment}
+                          />
+                        );
+                      })}
                     </ul>
                   )}
 
