@@ -119,9 +119,12 @@ function CalendarAssigneeLegend({ tickets }: { tickets: CalendarTicketView[] }) 
       <span className="text-xs font-medium text-muted-foreground">Assignees</span>
       <ul className="flex flex-wrap items-center gap-x-4 gap-y-1">
         {items.map((item) => (
-          <li key={item.key} className="flex items-center gap-1.5 text-xs text-foreground">
+          <li key={item.key} className="flex items-center gap-2 text-xs text-foreground">
             <span
-              className={cn("h-2.5 w-2.5 shrink-0 rounded-full", item.colors.swatch)}
+              className={cn(
+                "h-3.5 w-3.5 shrink-0 rounded-full shadow-sm ring-2 ring-white",
+                item.colors.swatch,
+              )}
               aria-hidden="true"
             />
             <span>
@@ -240,13 +243,20 @@ export function CalendarMonthView({
                         <Link
                           href={ticket.href}
                           className={cn(
-                            "min-w-0 flex-1 rounded border-l-2 px-1 py-0.5 text-left text-[11px] leading-snug",
+                            "min-w-0 flex-1 rounded border-l-4 px-1 py-0.5 text-left text-[11px] leading-snug",
                             "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
                             assigneeColors.pill,
                           )}
                           title={pillLabel}
                           aria-label={pillLabel}
                         >
+                          <span
+                            className={cn(
+                              "mr-0.5 inline-block h-1.5 w-1.5 shrink-0 rounded-full align-middle",
+                              assigneeColors.swatch,
+                            )}
+                            aria-hidden="true"
+                          />
                           <span className="font-medium text-muted-foreground">{ticket.key}</span>{" "}
                           <span className="line-clamp-1">{ticket.title}</span>
                         </Link>

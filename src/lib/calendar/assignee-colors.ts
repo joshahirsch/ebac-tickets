@@ -12,45 +12,45 @@ export type AssigneeColorClasses = {
   swatch: string;
 };
 
-/** Soft tinted palette with readable text and a distinct left-edge accent. */
+/** Tinted palette with readable text and a strong left-edge accent. */
 const ASSIGNEE_COLOR_PALETTE: AssigneeColorClasses[] = [
   {
-    pill: "bg-blue-50 text-blue-950 border-l-blue-500 hover:bg-blue-100",
-    swatch: "bg-blue-500",
+    pill: "bg-blue-100 text-blue-950 border-l-blue-600 hover:bg-blue-200",
+    swatch: "bg-blue-600",
   },
   {
-    pill: "bg-amber-50 text-amber-950 border-l-amber-500 hover:bg-amber-100",
-    swatch: "bg-amber-500",
+    pill: "bg-amber-100 text-amber-950 border-l-amber-600 hover:bg-amber-200",
+    swatch: "bg-amber-600",
   },
   {
-    pill: "bg-emerald-50 text-emerald-950 border-l-emerald-500 hover:bg-emerald-100",
-    swatch: "bg-emerald-500",
+    pill: "bg-emerald-100 text-emerald-950 border-l-emerald-600 hover:bg-emerald-200",
+    swatch: "bg-emerald-600",
   },
   {
-    pill: "bg-violet-50 text-violet-950 border-l-violet-500 hover:bg-violet-100",
-    swatch: "bg-violet-500",
+    pill: "bg-violet-100 text-violet-950 border-l-violet-600 hover:bg-violet-200",
+    swatch: "bg-violet-600",
   },
   {
-    pill: "bg-rose-50 text-rose-950 border-l-rose-500 hover:bg-rose-100",
-    swatch: "bg-rose-500",
+    pill: "bg-rose-100 text-rose-950 border-l-rose-600 hover:bg-rose-200",
+    swatch: "bg-rose-600",
   },
   {
-    pill: "bg-cyan-50 text-cyan-950 border-l-cyan-600 hover:bg-cyan-100",
-    swatch: "bg-cyan-600",
+    pill: "bg-cyan-100 text-cyan-950 border-l-cyan-700 hover:bg-cyan-200",
+    swatch: "bg-cyan-700",
   },
   {
-    pill: "bg-orange-50 text-orange-950 border-l-orange-500 hover:bg-orange-100",
-    swatch: "bg-orange-500",
+    pill: "bg-orange-100 text-orange-950 border-l-orange-600 hover:bg-orange-200",
+    swatch: "bg-orange-600",
   },
   {
-    pill: "bg-teal-50 text-teal-950 border-l-teal-600 hover:bg-teal-100",
-    swatch: "bg-teal-600",
+    pill: "bg-teal-100 text-teal-950 border-l-teal-700 hover:bg-teal-200",
+    swatch: "bg-teal-700",
   },
 ];
 
 const UNASSIGNED_COLOR_CLASSES: AssigneeColorClasses = {
-  pill: "bg-slate-100 text-slate-800 border-l-slate-400 hover:bg-slate-200",
-  swatch: "bg-slate-400",
+  pill: "bg-slate-200 text-slate-800 border-l-slate-500 hover:bg-slate-300",
+  swatch: "bg-slate-500",
 };
 
 function hashString(value: string): number {
