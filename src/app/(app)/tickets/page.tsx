@@ -70,11 +70,6 @@ export default async function TicketsPage({ searchParams }: { searchParams: SP }
         <div>
           <h1 className="text-2xl font-semibold">Tickets</h1>
           <p className="text-sm text-muted-foreground">{tickets.length} shown</p>
-          {process.env.EBAC_ARCHIVE_DEBUG === "1" || user.role === "ADMIN" ? (
-            <p className="text-xs text-muted-foreground">
-              Archive debug: role={user.role}, canArchive={String(canArchive)}
-            </p>
-          ) : null}
         </div>
         {can(user.role, "ticket:create") ? (
           <Button asChild size="sm">

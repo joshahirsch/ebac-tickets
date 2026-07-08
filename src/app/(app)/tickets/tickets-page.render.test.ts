@@ -66,7 +66,6 @@ describe("TicketsPage archive controls for ADMIN", () => {
     const page = await TicketsPage({ searchParams: {} });
     const html = renderToStaticMarkup(page);
 
-    expect(html).toContain("Archive debug: role=ADMIN, canArchive=true");
     expect(html).toContain('role="checkbox"');
     expect(html).toContain('aria-label="Archive ticket"');
   });
