@@ -32,3 +32,11 @@ next-env.d.ts
 
 # prisma
 /prisma/*.db
+
+node_modules/
+.next/
+.env
+.env.local
+.DS_Store
+*.log
+.vercel/
