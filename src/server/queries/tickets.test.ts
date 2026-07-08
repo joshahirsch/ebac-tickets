@@ -6,6 +6,7 @@ import {
   viewToQuick,
 } from "@/lib/ticket-list-search-params";
 import { buildTicketWhere, parseSort, getTicketById } from "@/server/queries/tickets";
+import { dueThisWeekRange, overdueBefore } from "@/lib/date/date-only";
 
 const ticketFindFirst = vi.fn();
 
@@ -209,10 +210,11 @@ describe("buildTicketWhere quick/view filters", () => {
 
   it("filters due this week with open statuses", () => {
     const where = buildTicketWhere(workspaceId, { quick: "due-week" }, userId);
+    const { gte, lte } = dueThisWeekRange();
     expect(where.AND).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          dueDate: expect.objectContaining({ gte: expect.any(Date), lte: expect.any(Date) }),
+          dueDate: { gte, lte },
           status: { in: ["BACKLOG", "TODO", "IN_PROGRESS", "BLOCKED", "IN_REVIEW"] },
         }),
       ]),
@@ -224,7 +226,7 @@ describe("buildTicketWhere quick/view filters", () => {
     expect(where.AND).toEqual(
       expect.arrayContaining([
         {
-          dueDate: { lt: expect.any(Date) },
+          dueDate: { lt: overdueBefore() },
           status: { in: ["BACKLOG", "TODO", "IN_PROGRESS", "BLOCKED", "IN_REVIEW"] },
         },
       ]),

@@ -24,14 +24,17 @@ describe("createTicketSchema", () => {
     expect(r.success).toBe(false);
   });
 
-  it("parses a due date string into a Date", () => {
+  it("parses a due date string into a UTC-noon Date", () => {
     const r = createTicketSchema.safeParse({
       title: "With due date",
       projectId: "p1",
       dueDate: "2026-08-01",
     });
     expect(r.success).toBe(true);
-    if (r.success) expect(r.data.dueDate).toBeInstanceOf(Date);
+    if (r.success) {
+      expect(r.data.dueDate).toBeInstanceOf(Date);
+      expect(r.data.dueDate?.toISOString()).toBe("2026-08-01T12:00:00.000Z");
+    }
   });
 });
 

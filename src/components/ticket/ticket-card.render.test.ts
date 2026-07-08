@@ -28,3 +28,19 @@ describe("TicketCard detail links", () => {
     expect(html).toContain("Draft training guide and quick-start SOP");
   });
 });
+
+describe("TicketCard due date rendering", () => {
+  it("renders the UTC calendar day consistently for stored timestamps", () => {
+    const html = renderToStaticMarkup(
+      createElement(TicketCard, {
+        ticket: {
+          ...pmgtTicket,
+          dueDate: new Date("2026-07-13T00:00:00.000Z"),
+        },
+      }),
+    );
+
+    expect(html).toContain("Jul 13");
+    expect(html).not.toContain("Jul 12");
+  });
+});

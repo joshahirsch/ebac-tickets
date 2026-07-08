@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { formatDistanceToNow, format } from "date-fns";
+import { formatDistanceToNow } from "date-fns";
+import { formatDueDate } from "@/lib/date/date-only";
 import { requireUser } from "@/lib/auth";
 import { getDashboardData } from "@/server/queries/dashboard";
 import { TICKET_STATUS_ORDER, TICKET_STATUS_META } from "@/lib/constants";
@@ -107,7 +108,7 @@ export default async function DashboardPage({
                         <span className="text-muted-foreground">{t.project.key}-{t.number}</span> {t.title}
                       </span>
                       <span className="shrink-0 text-xs text-amber-600">
-                        {t.dueDate ? format(t.dueDate, "MMM d") : ""}
+                        {t.dueDate ? formatDueDate(t.dueDate) : ""}
                       </span>
                     </Link>
                   </li>

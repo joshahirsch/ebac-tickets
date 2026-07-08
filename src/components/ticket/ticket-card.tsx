@@ -1,7 +1,8 @@
 import Link from "next/link";
-import { format, isPast } from "date-fns";
+import { format } from "date-fns";
 import { CalendarClock } from "lucide-react";
 import type { TicketListItem } from "@/server/queries/tickets";
+import { formatDateOnlyCompact, isDateOnlyPast, toDateOnly } from "@/lib/date/date-only";
 import { cn, initials } from "@/lib/utils";
 import { PriorityBadge } from "@/components/priority-badge";
 import { TypeBadge } from "@/components/type-badge";
@@ -11,8 +12,12 @@ import { TypeBadge } from "@/components/type-badge";
  * Interaction (drag) is added by wrapping parents; the card itself just links.
  */
 export function TicketCard({ ticket }: { ticket: TicketListItem }) {
+  const dueDateOnly = toDateOnly(ticket.dueDate);
   const overdue =
-    ticket.dueDate && isPast(ticket.dueDate) && ticket.status !== "DONE" && ticket.status !== "ARCHIVED";
+    dueDateOnly &&
+    isDateOnlyPast(dueDateOnly) &&
+    ticket.status !== "DONE" &&
+    ticket.status !== "ARCHIVED";
 
   return (
     <div className="rounded-md border bg-card p-3 shadow-sm">
@@ -44,10 +49,10 @@ export function TicketCard({ ticket }: { ticket: TicketListItem }) {
       <div className="mt-3 flex items-center justify-between">
         <PriorityBadge priority={ticket.priority} />
         <div className="flex items-center gap-2">
-          {ticket.dueDate ? (
+          {dueDateOnly ? (
             <span className={cn("flex items-center gap-1 text-[11px] text-muted-foreground", overdue && "font-medium text-red-600")}>
               <CalendarClock className="h-3 w-3" />
-              {format(ticket.dueDate, "MMM d")}
+              {formatDateOnlyCompact(dueDateOnly)}
             </span>
           ) : null}
           {ticket.assignee ? (

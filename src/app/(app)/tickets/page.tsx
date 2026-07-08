@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import { requireUser } from "@/lib/auth";
+import { toDateOnly } from "@/lib/date/date-only";
 import { can, canArchiveTickets } from "@/lib/rbac";
 import { parseTicketListSearchParams } from "@/lib/ticket-list-search-params";
 import { getTicketsList } from "@/server/queries/tickets";
@@ -67,7 +68,7 @@ export default async function TicketsPage({ searchParams }: { searchParams: SP }
           priority: t.priority,
           type: t.type,
           isArchived: t.isArchived,
-          dueDate: t.dueDate?.toISOString() ?? null,
+          dueDate: toDateOnly(t.dueDate),
           updatedAt: t.updatedAt.toISOString(),
           project: t.project,
           assignee: t.assignee,

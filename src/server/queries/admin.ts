@@ -1,6 +1,7 @@
 import "server-only";
 import { prisma } from "@/lib/prisma";
 import { OPEN_STATUSES } from "@/lib/constants";
+import { overdueBefore } from "@/lib/date/date-only";
 
 /** All users in the workspace with a count of open tickets assigned to them. */
 export async function getAllUsers(workspaceId: string | null) {
@@ -34,6 +35,7 @@ export async function getLabelsWithUsage(workspaceId: string | null) {
 export async function getReportMetrics(workspaceId: string | null) {
   const now = new Date();
   const monthAgo = new Date(now.getTime() - 30 * 24 * 3600 * 1000);
+  const overdueCutoff = overdueBefore(now);
   const scope = { project: { workspaceId: workspaceId ?? undefined } };
 
   const [total, open, done, blocked, overdue, createdLast30, doneLast30, byType, byPriority, projects] =
@@ -43,7 +45,7 @@ export async function getReportMetrics(workspaceId: string | null) {
       prisma.ticket.count({ where: { ...scope, status: "DONE" } }),
       prisma.ticket.count({ where: { ...scope, isArchived: false, status: "BLOCKED" } }),
       prisma.ticket.count({
-        where: { ...scope, isArchived: false, status: { in: OPEN_STATUSES }, dueDate: { lt: now } },
+        where: { ...scope, isArchived: false, status: { in: OPEN_STATUSES }, dueDate: { lt: overdueCutoff } },
       }),
       prisma.ticket.count({ where: { ...scope, createdAt: { gte: monthAgo } } }),
       prisma.ticket.count({ where: { ...scope, status: "DONE", updatedAt: { gte: monthAgo } } }),

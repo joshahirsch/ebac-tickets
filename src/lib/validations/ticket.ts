@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { parseFormDateOnly } from "@/lib/date/date-only";
 
 // Enum values kept in sync with the Prisma schema. Using z.enum keeps the DB
 // as the source of truth for allowed values while validating at the edge.
@@ -40,17 +41,13 @@ const patchId = z
 const optionalDate = z
   .string()
   .optional()
-  .transform((v) => (v && v.length > 0 ? new Date(v) : null))
-  .refine((d) => d === null || !Number.isNaN(d.getTime()), { message: "Invalid due date." });
+  .transform((v) => (v && v.length > 0 ? parseFormDateOnly(v) : null));
 
 // Update: distinguish "absent" (undefined → leave unchanged) from "" (null → clear).
 const patchDate = z
   .string()
   .optional()
-  .transform((v) => (v === undefined ? undefined : v.length > 0 ? new Date(v) : null))
-  .refine((d) => d === undefined || d === null || !Number.isNaN(d.getTime()), {
-    message: "Invalid due date.",
-  });
+  .transform((v) => (v === undefined ? undefined : v.length > 0 ? parseFormDateOnly(v) : null));
 
 export const createTicketSchema = z.object({
   title: z.string().trim().min(3, "Title must be at least 3 characters.").max(200),

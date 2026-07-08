@@ -69,3 +69,19 @@ describe("TicketTable archive controls rendering", () => {
     expect(html).toContain("Schedule post-launch review");
   });
 });
+
+describe("TicketTable due date rendering", () => {
+  it("renders the UTC calendar day for midnight-stored due dates", () => {
+    const html = renderToStaticMarkup(
+      createElement(TicketTable, {
+        tickets: [{ ...sampleTicket, dueDate: "2026-07-13" }],
+        currentSort: "updatedAt:desc",
+        canArchive: false,
+        viewingArchived: false,
+      }),
+    );
+
+    expect(html).toContain("Jul 13");
+    expect(html).not.toContain("Jul 12");
+  });
+});

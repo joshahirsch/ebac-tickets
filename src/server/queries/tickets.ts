@@ -2,9 +2,8 @@ import "server-only";
 import type { Prisma, TicketStatus, TicketPriority, TicketType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { OPEN_STATUSES } from "@/lib/constants";
+import { dueThisWeekRange, overdueBefore } from "@/lib/date/date-only";
 import { normalizeSortParam, type TicketListParams } from "@/lib/ticket-list-search-params";
-
-const DAY = 24 * 60 * 60 * 1000;
 
 export type { TicketListParams };
 
@@ -29,7 +28,6 @@ export function buildTicketWhere(
   params: TicketListParams,
   currentUserId: string,
 ): Prisma.TicketWhereInput {
-  const now = new Date();
   const where: Prisma.TicketWhereInput = {
     project: { workspaceId: workspaceId ?? undefined },
   };
@@ -70,11 +68,13 @@ export function buildTicketWhere(
     case "my":
       and.push({ assigneeId: currentUserId });
       break;
-    case "due-week":
-      and.push({ dueDate: { gte: now, lte: new Date(now.getTime() + 7 * DAY) }, status: { in: OPEN_STATUSES } });
+    case "due-week": {
+      const { gte, lte } = dueThisWeekRange();
+      and.push({ dueDate: { gte, lte }, status: { in: OPEN_STATUSES } });
       break;
+    }
     case "overdue":
-      and.push({ dueDate: { lt: now }, status: { in: OPEN_STATUSES } });
+      and.push({ dueDate: { lt: overdueBefore() }, status: { in: OPEN_STATUSES } });
       break;
     case "blocked":
       and.push({ status: "BLOCKED" });

@@ -9,6 +9,7 @@ import { assertCan, PermissionError } from "@/lib/rbac";
 import { recordActivity } from "@/server/activity";
 import { createNotification } from "@/server/notifications";
 import { humanize } from "@/lib/utils";
+import { dueDatesEqual } from "@/lib/date/date-only";
 import {
   createTicketSchema,
   updateTicketSchema,
@@ -220,17 +221,17 @@ export async function updateTicketAction(input: UpdateTicketInput): Promise<Acti
   }
 
   if (data.dueDate !== undefined) {
-    const newDue = data.dueDate ? data.dueDate.toISOString() : null;
-    const oldDue = existing.dueDate ? existing.dueDate.toISOString() : null;
-    if (newDue !== oldDue) {
-      updates.dueDate = data.dueDate ?? null;
+    const newDue = data.dueDate ?? null;
+    const oldDue = existing.dueDate ?? null;
+    if (!dueDatesEqual(newDue, oldDue)) {
+      updates.dueDate = newDue;
       activities.push({
         ticketId: existing.id,
         actorId: user.id,
         type: "DUE_DATE_CHANGED",
         message: `${actor} ${newDue ? "set" : "cleared"} the due date`,
-        fromValue: oldDue,
-        toValue: newDue,
+        fromValue: oldDue ? oldDue.toISOString() : null,
+        toValue: newDue ? newDue.toISOString() : null,
       });
     }
   }

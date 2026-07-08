@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { format, isPast } from "date-fns";
+import { format } from "date-fns";
+import { formatDateOnlyCompact, isDateOnlyPast } from "@/lib/date/date-only";
 import { Archive, ArrowDown, ArrowUp, RotateCcw } from "lucide-react";
 import type { TicketStatus, TicketPriority, TicketType } from "@prisma/client";
 import {
@@ -332,10 +333,13 @@ export function TicketTable({
           </TableHeader>
           <TableBody>
             {visibleTickets.map((t) => {
-              const dueDate = t.dueDate ? new Date(t.dueDate) : null;
+              const dueDateOnly = t.dueDate;
               const updatedAt = new Date(t.updatedAt);
               const overdue =
-                dueDate && isPast(dueDate) && t.status !== "DONE" && t.status !== "ARCHIVED";
+                dueDateOnly &&
+                isDateOnlyPast(dueDateOnly) &&
+                t.status !== "DONE" &&
+                t.status !== "ARCHIVED";
               const rowSelectable = viewingArchived ? t.isArchived : !t.isArchived;
 
               return (
@@ -396,7 +400,7 @@ export function TicketTable({
                   <TableCell
                     className={cn("hidden text-sm sm:table-cell", overdue && "font-medium text-red-600")}
                   >
-                    {dueDate ? format(dueDate, "MMM d") : (
+                    {dueDateOnly ? formatDateOnlyCompact(dueDateOnly) : (
                       <span className="text-muted-foreground">—</span>
                     )}
                   </TableCell>

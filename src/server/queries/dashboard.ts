@@ -2,8 +2,7 @@ import "server-only";
 import type { TicketStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { OPEN_STATUSES } from "@/lib/constants";
-
-const DAY = 24 * 60 * 60 * 1000;
+import { dueThisWeekRange, overdueBefore } from "@/lib/date/date-only";
 
 export type DashboardData = Awaited<ReturnType<typeof getDashboardData>>;
 
@@ -13,8 +12,7 @@ export type DashboardData = Awaited<ReturnType<typeof getDashboardData>>;
  * efficiency, then joined to display names.
  */
 export async function getDashboardData(workspaceId: string | null) {
-  const now = new Date();
-  const soon = new Date(now.getTime() + 7 * DAY);
+  const dueSoonRange = dueThisWeekRange();
   const projectScope = workspaceId ? { project: { workspaceId } } : {};
   const openScope = { isArchived: false, status: { in: OPEN_STATUSES } };
 
@@ -30,10 +28,10 @@ export async function getDashboardData(workspaceId: string | null) {
   ] = await Promise.all([
     prisma.ticket.count({ where: { ...projectScope, ...openScope } }),
     prisma.ticket.count({
-      where: { ...projectScope, ...openScope, dueDate: { lt: now } },
+      where: { ...projectScope, ...openScope, dueDate: { lt: overdueBefore() } },
     }),
     prisma.ticket.count({
-      where: { ...projectScope, ...openScope, dueDate: { gte: now, lte: soon } },
+      where: { ...projectScope, ...openScope, dueDate: { gte: dueSoonRange.gte, lte: dueSoonRange.lte } },
     }),
     prisma.ticket.count({
       where: { ...projectScope, isArchived: false, status: "BLOCKED" },
@@ -58,7 +56,7 @@ export async function getDashboardData(workspaceId: string | null) {
       },
     }),
     prisma.ticket.findMany({
-      where: { ...projectScope, ...openScope, dueDate: { gte: now, lte: soon } },
+      where: { ...projectScope, ...openScope, dueDate: { gte: dueSoonRange.gte, lte: dueSoonRange.lte } },
       orderBy: { dueDate: "asc" },
       take: 6,
       include: {

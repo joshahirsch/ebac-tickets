@@ -149,10 +149,7 @@ export function planKickoffCardSeedAction(input: {
   return "skip";
 }
 
-export function parseKickoffDueDate(isoDate: string): Date {
-  const [year, month, day] = isoDate.split("-").map(Number);
-  return new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
-}
+export { parseFormDateOnly as parseKickoffDueDate } from "@/lib/date/date-only";
 
 export const EBAC_KICKOFF_CARDS: KickoffCardDef[] = [
   // A. Kickoff Ready

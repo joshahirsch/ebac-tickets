@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { format, formatDistanceToNow } from "date-fns";
+import { dueDateInputValue, formatDateOnlyLong } from "@/lib/date/date-only";
 import { ArrowLeft, Paperclip } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { can, canArchiveTickets, isReadOnly } from "@/lib/rbac";
@@ -55,7 +56,7 @@ export default async function TicketDetailPage({ params }: { params: RouteParams
   const canArchive = canArchiveTickets(user.role);
   const readOnly = isReadOnly(user.role);
   const users = canEdit ? await getAssignableUsers(user.workspaceId) : [];
-  const dueValue = ticket.dueDate ? format(ticket.dueDate, "yyyy-MM-dd") : null;
+  const dueValue = dueDateInputValue(ticket.dueDate);
 
   return (
     <div className="mx-auto max-w-5xl space-y-4">
@@ -219,7 +220,7 @@ export default async function TicketDetailPage({ params }: { params: RouteParams
                 {canEdit ? (
                   <DueDateField ticketId={ticket.id} value={dueValue} />
                 ) : (
-                  <span>{ticket.dueDate ? format(ticket.dueDate, "MMM d, yyyy") : "—"}</span>
+                  <span>{dueValue ? formatDateOnlyLong(dueValue) : "—"}</span>
                 )}
               </Field>
             </CardContent>

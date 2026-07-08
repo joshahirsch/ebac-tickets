@@ -53,6 +53,7 @@ import {
   archiveTicketAction,
   bulkArchiveTicketsAction,
   reopenTicketAction,
+  updateTicketAction,
 } from "@/server/actions/tickets";
 
 beforeEach(() => {
@@ -174,5 +175,29 @@ describe("reopenTicketAction", () => {
         data: expect.objectContaining({ isArchived: false, status: "TODO" }),
       }),
     );
+  });
+});
+
+describe("updateTicketAction due dates", () => {
+  it("does not rewrite the due date when saving the same calendar day", async () => {
+    vi.mocked(requireUser).mockResolvedValue(mockUser);
+    ticketFindUnique.mockResolvedValue({
+      id: "t1",
+      title: "Stakeholder roster",
+      description: "",
+      status: "TODO",
+      priority: "MEDIUM",
+      type: "TASK",
+      assigneeId: null,
+      isArchived: false,
+      dueDate: new Date("2026-07-13T00:00:00.000Z"),
+      project: { workspaceId: "ws-1" },
+    });
+
+    const res = await updateTicketAction({ id: "t1", dueDate: "2026-07-13" });
+
+    expect(res.ok).toBe(true);
+    expect(ticketUpdate).not.toHaveBeenCalled();
+    expect(activityCreate).not.toHaveBeenCalled();
   });
 });

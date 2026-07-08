@@ -124,4 +124,21 @@ describe("TicketDetailPage", () => {
 
     expect(notFound).toHaveBeenCalled();
   });
+
+  it("renders the same calendar due date in the editable input for admins", async () => {
+    vi.mocked(getTicketById).mockResolvedValue({
+      ...pmgtTicket,
+      number: 2,
+      title: "Confirm EBAC stakeholder roster",
+      dueDate: new Date("2026-07-13T00:00:00.000Z"),
+    } as never);
+
+    const page = await TicketDetailPage({
+      params: Promise.resolve({ id: "ticket-pmgt-2" }),
+    });
+    const html = renderToStaticMarkup(page);
+
+    expect(html).toContain('value="2026-07-13"');
+    expect(html).not.toContain('value="2026-07-12"');
+  });
 });
