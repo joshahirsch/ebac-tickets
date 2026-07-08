@@ -1,0 +1,339 @@
+// EBAC Projects — Prisma schema
+// Postgres (Supabase). Uses enums for durable state, archive flags for soft
+// deletion, and indexes on the hot ticket query paths.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum Role {
+  ADMIN
+  MANAGER
+  MEMBER
+  VIEWER
+}
+
+enum ProjectStatus {
+  ACTIVE
+  PAUSED
+  COMPLETED
+  ARCHIVED
+}
+
+enum TicketStatus {
+  BACKLOG
+  TODO
+  IN_PROGRESS
+  BLOCKED
+  IN_REVIEW
+  DONE
+  ARCHIVED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum TicketType {
+  TASK
+  MILESTONE
+  EVENT
+  REQUEST
+  MAINTENANCE
+  OTHER
+}
+
+enum ActivityType {
+  TICKET_CREATED
+  STATUS_CHANGED
+  PRIORITY_CHANGED
+  ASSIGNEE_CHANGED
+  DUE_DATE_CHANGED
+  TYPE_CHANGED
+  TITLE_CHANGED
+  DESCRIPTION_CHANGED
+  COMMENT_ADDED
+  ATTACHMENT_ADDED
+  LABEL_ADDED
+  LABEL_REMOVED
+  TICKET_ARCHIVED
+  TICKET_REOPENED
+}
+
+enum NotificationType {
+  TICKET_ASSIGNED
+  MENTIONED
+  DUE_SOON
+  TICKET_BLOCKED
+  STATUS_CHANGED
+}
+
+enum SprintStatus {
+  PLANNED
+  ACTIVE
+  COMPLETED
+}
+
+// ---------------------------------------------------------------------------
+// Core identity & workspace
+// ---------------------------------------------------------------------------
+
+model User {
+  id           String   @id @default(cuid())
+  // Mirrors the Supabase auth.users id so app rows map 1:1 to auth identities.
+  authId       String?  @unique
+  email        String   @unique
+  name         String?
+  avatarUrl    String?
+  role         Role     @default(VIEWER)
+  isActive     Boolean  @default(true)
+  workspaceId  String?
+  workspace    Workspace? @relation(fields: [workspaceId], references: [id])
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  ownedProjects   Project[]        @relation("ProjectOwner")
+  memberships     ProjectMember[]
+  reportedTickets Ticket[]         @relation("TicketReporter")
+  assignedTickets Ticket[]         @relation("TicketAssignee")
+  comments        TicketComment[]
+  activities      TicketActivity[]
+  attachments     TicketAttachment[]
+  notifications   Notification[]
+
+  @@index([workspaceId])
+  @@index([role])
+}
+
+model Workspace {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users    User[]
+  projects Project[]
+  labels   TicketLabel[]
+}
+
+// ---------------------------------------------------------------------------
+// Projects
+// ---------------------------------------------------------------------------
+
+model Project {
+  id          String        @id @default(cuid())
+  key         String        // short prefix used for ticket numbers, e.g. "WEB"
+  name        String
+  description String?       @db.Text
+  category    String?       // client name or internal category
+  status      ProjectStatus @default(ACTIVE)
+  workspaceId String
+  workspace   Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  ownerId     String?
+  owner       User?         @relation("ProjectOwner", fields: [ownerId], references: [id])
+  ticketSeq   Int           @default(0) // monotonic counter for per-project ticket numbers
+  archivedAt  DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  tickets  Ticket[]
+  members  ProjectMember[]
+  sprints  Sprint[]
+
+  @@unique([workspaceId, key])
+  @@index([workspaceId])
+  @@index([status])
+  @@index([ownerId])
+}
+
+model ProjectMember {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([projectId, userId])
+  @@index([userId])
+}
+
+// ---------------------------------------------------------------------------
+// Sprints / Milestones (kept intentionally light for MVP)
+// ---------------------------------------------------------------------------
+
+model Sprint {
+  id        String       @id @default(cuid())
+  name      String
+  goal      String?      @db.Text
+  status    SprintStatus @default(PLANNED)
+  startDate DateTime?
+  endDate   DateTime?
+  projectId String
+  project   Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  tickets Ticket[]
+
+  @@index([projectId])
+  @@index([status])
+}
+
+// ---------------------------------------------------------------------------
+// Tickets
+// ---------------------------------------------------------------------------
+
+model Ticket {
+  id          String         @id @default(cuid())
+  number      Int            // per-project sequential number (see Project.ticketSeq)
+  title       String
+  description String?        @db.Text
+  status      TicketStatus   @default(BACKLOG)
+  priority    TicketPriority @default(MEDIUM)
+  type        TicketType     @default(TASK)
+  dueDate     DateTime?
+  isArchived  Boolean        @default(false)
+  archivedAt  DateTime?
+
+  projectId  String
+  project    Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  reporterId String?
+  reporter   User?   @relation("TicketReporter", fields: [reporterId], references: [id])
+  assigneeId String?
+  assignee   User?   @relation("TicketAssignee", fields: [assigneeId], references: [id])
+  sprintId   String?
+  sprint     Sprint? @relation(fields: [sprintId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  labels      TicketLabelOnTicket[]
+  comments    TicketComment[]
+  activities  TicketActivity[]
+  attachments TicketAttachment[]
+
+  @@unique([projectId, number])
+  @@index([projectId])
+  @@index([assigneeId])
+  @@index([reporterId])
+  @@index([status])
+  @@index([priority])
+  @@index([type])
+  @@index([dueDate])
+  @@index([isArchived])
+  @@index([createdAt])
+  @@index([updatedAt])
+}
+
+model TicketLabel {
+  id          String    @id @default(cuid())
+  name        String
+  color       String    @default("#64748b") // slate-500
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  createdAt   DateTime  @default(now())
+
+  tickets TicketLabelOnTicket[]
+
+  @@unique([workspaceId, name])
+  @@index([workspaceId])
+}
+
+// Explicit join table so we can extend with metadata later if needed.
+model TicketLabelOnTicket {
+  ticketId String
+  ticket   Ticket      @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  labelId  String
+  label    TicketLabel @relation(fields: [labelId], references: [id], onDelete: Cascade)
+  addedAt  DateTime    @default(now())
+
+  @@id([ticketId, labelId])
+  @@index([labelId])
+}
+
+model TicketComment {
+  id        String   @id @default(cuid())
+  body      String   @db.Text
+  ticketId  String
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  authorId  String?
+  author    User?    @relation(fields: [authorId], references: [id])
+  isEdited  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ticketId])
+  @@index([authorId])
+}
+
+model TicketActivity {
+  id        String       @id @default(cuid())
+  type      ActivityType
+  // Human-readable summary rendered directly in the activity log.
+  message   String
+  // Structured before/after for machine use (nullable JSON).
+  fromValue String?
+  toValue   String?
+  ticketId  String
+  ticket    Ticket       @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  actorId   String?
+  actor     User?        @relation(fields: [actorId], references: [id])
+  createdAt DateTime     @default(now())
+
+  @@index([ticketId])
+  @@index([actorId])
+  @@index([createdAt])
+}
+
+model TicketAttachment {
+  id         String   @id @default(cuid())
+  fileName   String
+  // Path/key within the Supabase Storage bucket.
+  storagePath String
+  mimeType   String?
+  sizeBytes  Int      @default(0)
+  ticketId   String
+  ticket     Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  uploaderId String?
+  uploader   User?    @relation(fields: [uploaderId], references: [id])
+  createdAt  DateTime @default(now())
+
+  @@index([ticketId])
+  @@index([uploaderId])
+}
+
+// ---------------------------------------------------------------------------
+// Notifications (in-app; email hook added later)
+// ---------------------------------------------------------------------------
+
+model Notification {
+  id        String           @id @default(cuid())
+  type      NotificationType
+  title     String
+  body      String?
+  // Deep-link target (e.g. /tickets/<id>).
+  link      String?
+  isRead    Boolean          @default(false)
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime         @default(now())
+
+  @@index([userId])
+  @@index([isRead])
+  @@index([createdAt])
+}
