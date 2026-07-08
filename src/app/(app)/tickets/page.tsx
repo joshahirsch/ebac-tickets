@@ -85,7 +85,7 @@ export default async function TicketsPage({ searchParams }: { searchParams: SP }
         }))}
         currentSort={currentSort}
         sortHref={sortHref}
-        canArchive={can(user.role, "ticket:archive")}
+        userRole={user.role}
         viewingArchived={searchParams.status === "ARCHIVED"}
       />
     </div>

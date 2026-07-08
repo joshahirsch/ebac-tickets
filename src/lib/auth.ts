@@ -9,8 +9,9 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
  * Linking & bootstrap rules:
  *  - Match first by authId, then by email (to link pre-seeded users on first login).
  *  - On first login, write authId back so future lookups are by id.
- *  - If the signed-in email equals BOOTSTRAP_ADMIN_EMAIL and no ADMIN exists yet,
- *    promote this user to ADMIN. This is the "first admin" bootstrap.
+ *  - If the signed-in email equals BOOTSTRAP_ADMIN_EMAIL, promote this user to ADMIN.
+ *    On first sign-in this bootstraps the workspace admin; on later sign-ins it repairs
+ *    a seeded or auto-created row that still holds a lower role.
  *  - Brand-new, unknown users are created as VIEWER (least privilege by default).
  */
 export async function getCurrentUser(): Promise<User | null> {
@@ -54,10 +55,8 @@ export async function getCurrentUser(): Promise<User | null> {
       },
     });
   } else if (
-    // Late bootstrap: seeded admin@ row that logs in and still needs promotion.
     process.env.BOOTSTRAP_ADMIN_EMAIL?.toLowerCase() === email &&
-    user.role !== "ADMIN" &&
-    (await prisma.user.count({ where: { role: "ADMIN" } })) === 0
+    user.role !== "ADMIN"
   ) {
     user = await prisma.user.update({ where: { id: user.id }, data: { role: "ADMIN" } });
   }

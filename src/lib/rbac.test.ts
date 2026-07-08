@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { can, assertCan, isReadOnly, PermissionError } from "@/lib/rbac";
+import { can, assertCan, isReadOnly, canArchiveTickets, normalizeRole, PermissionError } from "@/lib/rbac";
 
 describe("rbac.can", () => {
   it("gives ADMIN every core permission", () => {
@@ -8,7 +8,8 @@ describe("rbac.can", () => {
     expect(can("ADMIN", "settings:manage")).toBe(true);
   });
 
-  it("lets MANAGER manage projects but not users", () => {
+  it("lets MANAGER archive tickets and manage projects but not users", () => {
+    expect(can("MANAGER", "ticket:archive")).toBe(true);
     expect(can("MANAGER", "project:update")).toBe(true);
     expect(can("MANAGER", "label:manage")).toBe(true);
     expect(can("MANAGER", "user:manage")).toBe(false);
@@ -26,6 +27,22 @@ describe("rbac.can", () => {
     expect(can("VIEWER", "ticket:comment")).toBe(false);
     expect(isReadOnly("VIEWER")).toBe(true);
     expect(isReadOnly("MEMBER")).toBe(false);
+  });
+
+  it("normalizes persisted role strings before checking permissions", () => {
+    expect(normalizeRole(" manager ")).toBe("MANAGER");
+    expect(can(" manager ", "ticket:archive")).toBe(true);
+    expect(can("SUPER_ADMIN", "ticket:archive")).toBe(false);
+  });
+});
+
+describe("rbac.canArchiveTickets", () => {
+  it.each(["ADMIN", "MANAGER"] as const)("allows %s to archive", (role) => {
+    expect(canArchiveTickets(role)).toBe(true);
+  });
+
+  it.each(["MEMBER", "VIEWER"] as const)("denies %s archive access", (role) => {
+    expect(canArchiveTickets(role)).toBe(false);
   });
 });
 

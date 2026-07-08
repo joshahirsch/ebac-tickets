@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { format, formatDistanceToNow } from "date-fns";
 import { ArrowLeft, Paperclip } from "lucide-react";
 import { requireUser } from "@/lib/auth";
-import { can, isReadOnly } from "@/lib/rbac";
+import { can, canArchiveTickets, isReadOnly } from "@/lib/rbac";
 import { getTicketById } from "@/server/queries/tickets";
 import { getAssignableUsers } from "@/server/queries/lookups";
 import { initials } from "@/lib/utils";
@@ -36,7 +36,7 @@ export default async function TicketDetailPage({ params }: { params: { id: strin
 
   const canEdit = can(user.role, "ticket:update");
   const canComment = can(user.role, "ticket:comment");
-  const canArchive = can(user.role, "ticket:archive");
+  const canArchive = canArchiveTickets(user.role);
   const readOnly = isReadOnly(user.role);
   const users = canEdit ? await getAssignableUsers(user.workspaceId) : [];
   const dueValue = ticket.dueDate ? format(ticket.dueDate, "yyyy-MM-dd") : null;
