@@ -63,10 +63,52 @@ describe("TicketsPage archive controls for ADMIN", () => {
   });
 
   it("renders archive controls for admin@ebac.org", async () => {
-    const page = await TicketsPage({ searchParams: {} });
+    const page = await TicketsPage({ searchParams: Promise.resolve({}) });
     const html = renderToStaticMarkup(page);
 
     expect(html).toContain('role="checkbox"');
     expect(html).toContain('aria-label="Archive ticket"');
+  });
+
+  it("forwards awaited searchParams to getTicketsList", async () => {
+    await TicketsPage({
+      searchParams: Promise.resolve({
+        view: "blocked",
+        project: "proj-1",
+        status: "TODO",
+        priority: "HIGH",
+        type: "TASK",
+        assignee: "user-2",
+        q: "footer",
+        sort: "updated-desc",
+      }),
+    });
+
+    expect(getTicketsList).toHaveBeenCalledWith(
+      "ws-1",
+      "admin-1",
+      expect.objectContaining({
+        quick: "blocked",
+        projectId: "proj-1",
+        status: "TODO",
+        priority: "HIGH",
+        type: "TASK",
+        assigneeId: "user-2",
+        q: "footer",
+        sort: "updatedAt:desc",
+      }),
+    );
+  });
+
+  it("forwards archived=true to getTicketsList", async () => {
+    await TicketsPage({
+      searchParams: Promise.resolve({ archived: "true" }),
+    });
+
+    expect(getTicketsList).toHaveBeenCalledWith(
+      "ws-1",
+      "admin-1",
+      expect.objectContaining({ includeArchived: true }),
+    );
   });
 });

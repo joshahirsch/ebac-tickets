@@ -2,21 +2,11 @@ import "server-only";
 import type { Prisma, TicketStatus, TicketPriority, TicketType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { OPEN_STATUSES } from "@/lib/constants";
+import { normalizeSortParam, type TicketListParams } from "@/lib/ticket-list-search-params";
 
 const DAY = 24 * 60 * 60 * 1000;
 
-export type TicketListParams = {
-  q?: string;
-  status?: string;
-  priority?: string;
-  type?: string;
-  projectId?: string;
-  assigneeId?: string; // "me" is resolved by the caller
-  labelId?: string;
-  quick?: string; // my | due-week | overdue | blocked | high | recent
-  sort?: string; // e.g. "updatedAt:desc"
-  includeArchived?: boolean;
-};
+export type { TicketListParams };
 
 const isEnum = <T extends string>(v: string | undefined, allowed: readonly T[]): T | undefined =>
   v && (allowed as readonly string[]).includes(v) ? (v as T) : undefined;
@@ -45,10 +35,13 @@ export function buildTicketWhere(
   };
   const and: Prisma.TicketWhereInput[] = [];
 
-  // Archived visibility: hidden unless explicitly filtering to ARCHIVED or asked.
+  // Archived visibility: hidden unless explicitly viewing archived tickets.
   const statusFilter = isEnum(params.status, STATUSES);
-  if (!params.includeArchived && statusFilter !== "ARCHIVED") {
+  const viewingArchived = params.includeArchived || statusFilter === "ARCHIVED";
+  if (!viewingArchived) {
     where.isArchived = false;
+  } else if (params.includeArchived) {
+    and.push({ isArchived: true });
   }
 
   if (statusFilter) and.push({ status: statusFilter });
@@ -57,7 +50,11 @@ export function buildTicketWhere(
   const type = isEnum(params.type, TYPES);
   if (type) and.push({ type });
   if (params.projectId) and.push({ projectId: params.projectId });
-  if (params.assigneeId) and.push({ assigneeId: params.assigneeId });
+  if (params.assigneeId === "unassigned") {
+    and.push({ assigneeId: null });
+  } else if (params.assigneeId) {
+    and.push({ assigneeId: params.assigneeId });
+  }
   if (params.labelId) and.push({ labels: { some: { labelId: params.labelId } } });
 
   if (params.q) {
@@ -86,7 +83,7 @@ export function buildTicketWhere(
       and.push({ priority: { in: ["HIGH", "URGENT"] }, status: { in: OPEN_STATUSES } });
       break;
     case "recent":
-      and.push({ updatedAt: { gte: new Date(now.getTime() - 7 * DAY) } });
+      // Sort-only view; date filter is not applied here.
       break;
   }
 
@@ -95,7 +92,8 @@ export function buildTicketWhere(
 }
 
 export function parseSort(sort?: string): Prisma.TicketOrderByWithRelationInput {
-  const [field, dir] = (sort ?? "updatedAt:desc").split(":");
+  const normalized = normalizeSortParam(sort);
+  const [field, dir] = (normalized ?? "updatedAt:desc").split(":");
   const key = SORT_FIELDS[field] ?? "updatedAt";
   const direction: Prisma.SortOrder = dir === "asc" ? "asc" : "desc";
   return { [key]: direction };

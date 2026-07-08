@@ -1,28 +1,19 @@
 import { requireUser } from "@/lib/auth";
 import { can } from "@/lib/rbac";
-import { getTicketsList, type TicketListParams } from "@/server/queries/tickets";
+import { parseTicketListSearchParams } from "@/lib/ticket-list-search-params";
+import { getTicketsList } from "@/server/queries/tickets";
 import { getProjects, getAssignableUsers } from "@/server/queries/lookups";
 import { TicketFilters } from "@/components/ticket/ticket-filters";
 import { KanbanBoard } from "@/components/board/kanban-board";
 
 export const dynamic = "force-dynamic";
 
-type SP = Record<string, string | undefined>;
+type SP = Promise<Record<string, string | string[] | undefined>>;
 
 export default async function BoardPage({ searchParams }: { searchParams: SP }) {
   const user = await requireUser();
-  const assigneeId = searchParams.assigneeId === "me" ? user.id : searchParams.assigneeId;
-
-  const params: TicketListParams = {
-    q: searchParams.q,
-    priority: searchParams.priority,
-    type: searchParams.type,
-    projectId: searchParams.projectId,
-    assigneeId,
-    labelId: searchParams.labelId,
-    quick: searchParams.quick,
-    // Board provides its own status columns, so status filter is ignored here.
-  };
+  const sp = await searchParams;
+  const { params } = parseTicketListSearchParams(sp, user.id);
 
   const [tickets, projects, users] = await Promise.all([
     getTicketsList(user.workspaceId, user.id, params),

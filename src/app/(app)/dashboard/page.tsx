@@ -39,9 +39,9 @@ export default async function DashboardPage({
       {/* KPI row */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatCard label="Open tickets" value={counts.totalOpen} href="/tickets" />
-        <StatCard label="Due this week" value={counts.dueSoon} href="/tickets?quick=due-week" tone="warning" />
-        <StatCard label="Overdue" value={counts.overdue} href="/tickets?quick=overdue" tone="danger" />
-        <StatCard label="Blocked" value={counts.blocked} href="/tickets?quick=blocked" tone="danger" />
+        <StatCard label="Due this week" value={counts.dueSoon} href="/tickets?view=due-this-week" tone="warning" />
+        <StatCard label="Overdue" value={counts.overdue} href="/tickets?view=overdue" tone="danger" />
+        <StatCard label="Blocked" value={counts.blocked} href="/tickets?view=blocked" tone="danger" />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">

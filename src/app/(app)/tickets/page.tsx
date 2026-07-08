@@ -2,7 +2,8 @@ import Link from "next/link";
 import { Plus } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { can, canArchiveTickets } from "@/lib/rbac";
-import { getTicketsList, type TicketListParams } from "@/server/queries/tickets";
+import { parseTicketListSearchParams } from "@/lib/ticket-list-search-params";
+import { getTicketsList } from "@/server/queries/tickets";
 import { getProjects, getAssignableUsers } from "@/server/queries/lookups";
 import { TicketFilters } from "@/components/ticket/ticket-filters";
 import { TicketTable } from "@/components/ticket/ticket-table";
@@ -10,11 +11,13 @@ import { Button } from "@/components/ui/button";
 
 export const dynamic = "force-dynamic";
 
-type SP = Record<string, string | undefined>;
+type SP = Promise<Record<string, string | string[] | undefined>>;
 
 export default async function TicketsPage({ searchParams }: { searchParams: SP }) {
   const user = await requireUser();
   const canArchive = canArchiveTickets(user.role);
+  const sp = await searchParams;
+  const { params, currentSort, viewingArchived } = parseTicketListSearchParams(sp, user.id);
 
   if (
     process.env.EBAC_ARCHIVE_DEBUG === "1" ||
@@ -30,28 +33,11 @@ export default async function TicketsPage({ searchParams }: { searchParams: SP }
     });
   }
 
-  // Resolve "me" for assignee filter.
-  const assigneeId = searchParams.assigneeId === "me" ? user.id : searchParams.assigneeId;
-
-  const params: TicketListParams = {
-    q: searchParams.q,
-    status: searchParams.status,
-    priority: searchParams.priority,
-    type: searchParams.type,
-    projectId: searchParams.projectId,
-    assigneeId,
-    labelId: searchParams.labelId,
-    quick: searchParams.quick,
-    sort: searchParams.sort,
-  };
-
   const [tickets, projects, users] = await Promise.all([
     getTicketsList(user.workspaceId, user.id, params),
     getProjects(user.workspaceId),
     getAssignableUsers(user.workspaceId),
   ]);
-
-  const currentSort = searchParams.sort ?? "updatedAt:desc";
 
   return (
     <div className="mx-auto max-w-7xl space-y-4">
@@ -89,7 +75,7 @@ export default async function TicketsPage({ searchParams }: { searchParams: SP }
         }))}
         currentSort={currentSort}
         canArchive={canArchive}
-        viewingArchived={searchParams.status === "ARCHIVED"}
+        viewingArchived={viewingArchived}
       />
     </div>
   );
