@@ -1,4 +1,4 @@
-import { requireUser } from "@/lib/auth";
+import { requireRole } from "@/lib/auth";
 import { getReportMetrics } from "@/server/queries/admin";
 import { TICKET_TYPE_META, TICKET_PRIORITY_META, PROJECT_STATUS_META } from "@/lib/constants";
 import type { TicketType, TicketPriority, ProjectStatus } from "@prisma/client";
@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 export const dynamic = "force-dynamic";
 
 export default async function ReportsSettingsPage() {
-  const user = await requireUser();
+  const user = await requireRole(["ADMIN", "MANAGER"]);
   const { totals, byType, byPriority, projects } = await getReportMetrics(user.workspaceId);
   const maxType = Math.max(1, ...byType.map((t) => t.count));
 

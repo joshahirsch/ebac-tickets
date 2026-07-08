@@ -4,12 +4,23 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
-export function SettingsNav({ isAdmin }: { isAdmin: boolean }) {
+export function SettingsNav({
+  isAdmin,
+  canManage,
+}: {
+  isAdmin: boolean;
+  canManage: boolean;
+}) {
   const pathname = usePathname();
   const items = [
-    { href: "/settings/projects", label: "Projects" },
-    { href: "/settings/labels", label: "Labels" },
-    { href: "/settings/reports", label: "Reports" },
+    ...(canManage
+      ? [
+          { href: "/settings/projects", label: "Projects" },
+          { href: "/settings/labels", label: "Labels" },
+          { href: "/settings/reports", label: "Reports" },
+        ]
+      : []),
+    { href: "/settings/integrations", label: "Integrations" },
     ...(isAdmin ? [{ href: "/settings/users", label: "Users" }] : []),
   ];
 

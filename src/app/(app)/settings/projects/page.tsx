@@ -1,4 +1,4 @@
-import { requireUser } from "@/lib/auth";
+import { requireRole } from "@/lib/auth";
 import { getProjectsWithCounts } from "@/server/queries/projects";
 import { getAssignableUsers } from "@/server/queries/lookups";
 import { PROJECT_STATUS_META } from "@/lib/constants";
@@ -13,7 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 export const dynamic = "force-dynamic";
 
 export default async function ProjectsSettingsPage() {
-  const user = await requireUser();
+  const user = await requireRole(["ADMIN", "MANAGER"]);
   const [projects, owners] = await Promise.all([
     getProjectsWithCounts(user.workspaceId),
     getAssignableUsers(user.workspaceId),

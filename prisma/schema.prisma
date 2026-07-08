@@ -88,6 +88,19 @@ enum SprintStatus {
   COMPLETED
 }
 
+enum GoogleCalendarConnectionStatus {
+  CONNECTED
+  DISCONNECTED
+  ERROR
+}
+
+enum TicketCalendarSyncStatus {
+  SYNCED
+  PENDING
+  ERROR
+  DELETED
+}
+
 // ---------------------------------------------------------------------------
 // Core identity & workspace
 // ---------------------------------------------------------------------------
@@ -114,6 +127,8 @@ model User {
   activities      TicketActivity[]
   attachments     TicketAttachment[]
   notifications   Notification[]
+  googleCalendarConnection GoogleCalendarConnection?
+  ticketCalendarSyncs      TicketCalendarSync[]
 
   @@index([workspaceId])
   @@index([role])
@@ -227,6 +242,7 @@ model Ticket {
   comments    TicketComment[]
   activities  TicketActivity[]
   attachments TicketAttachment[]
+  calendarSyncs TicketCalendarSync[]
 
   @@unique([projectId, number])
   @@index([projectId])
@@ -337,4 +353,55 @@ model Notification {
   @@index([userId])
   @@index([isRead])
   @@index([createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Google Calendar personal sync (one-way: EBAC → user's primary calendar)
+// ---------------------------------------------------------------------------
+
+model GoogleCalendarConnection {
+  id                   String                         @id @default(cuid())
+  userId               String                         @unique
+  user                 User                           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  googleAccountEmail   String?
+  accessTokenEncrypted String                         @db.Text
+  refreshTokenEncrypted String?                       @db.Text
+  scope                String?
+  tokenExpiry          DateTime?
+  calendarId           String                         @default("primary")
+  status               GoogleCalendarConnectionStatus @default(CONNECTED)
+  lastSyncAt           DateTime?
+  lastSyncStatus       String?
+  lastSyncError        String?                        @db.Text
+  disconnectedAt       DateTime?
+  createdAt            DateTime                       @default(now())
+  updatedAt            DateTime                       @updatedAt
+
+  ticketSyncs TicketCalendarSync[]
+
+  @@index([status])
+}
+
+model TicketCalendarSync {
+  id                   String                   @id @default(cuid())
+  userId               String
+  user                 User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ticketId             String
+  ticket               Ticket                   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  calendarConnectionId String
+  calendarConnection   GoogleCalendarConnection @relation(fields: [calendarConnectionId], references: [id], onDelete: Cascade)
+  googleCalendarId     String                   @default("primary")
+  googleEventId        String
+  lastSyncedDueDate    String?                  // date-only yyyy-mm-dd
+  lastSyncedHash       String?
+  status               TicketCalendarSyncStatus @default(SYNCED)
+  lastError            String?                  @db.Text
+  createdAt            DateTime                 @default(now())
+  updatedAt            DateTime                 @updatedAt
+
+  @@unique([userId, ticketId])
+  @@index([googleEventId])
+  @@index([calendarConnectionId])
+  @@index([status])
+  @@index([ticketId])
 }

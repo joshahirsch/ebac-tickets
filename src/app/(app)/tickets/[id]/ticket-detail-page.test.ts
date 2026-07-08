@@ -25,9 +25,18 @@ vi.mock("@/server/queries/lookups", () => ({
   getAssignableUsers: vi.fn(),
 }));
 
+vi.mock("@/server/queries/google-calendar", () => ({
+  getGoogleCalendarConnectionView: vi.fn(),
+  getTicketCalendarSyncForUser: vi.fn(),
+}));
+
 import { requireUser } from "@/lib/auth";
 import { getTicketById } from "@/server/queries/tickets";
 import { getAssignableUsers } from "@/server/queries/lookups";
+import {
+  getGoogleCalendarConnectionView,
+  getTicketCalendarSyncForUser,
+} from "@/server/queries/google-calendar";
 import TicketDetailPage from "@/app/(app)/tickets/[id]/page";
 
 const adminUser = {
@@ -82,6 +91,17 @@ describe("TicketDetailPage", () => {
     vi.clearAllMocks();
     vi.mocked(requireUser).mockResolvedValue(adminUser);
     vi.mocked(getAssignableUsers).mockResolvedValue([]);
+    vi.mocked(getGoogleCalendarConnectionView).mockResolvedValue({
+      configured: true,
+      connected: false,
+      status: "NOT_CONNECTED",
+      googleAccountEmail: null,
+      calendarId: "primary",
+      lastSyncAt: null,
+      lastSyncStatus: null,
+      lastSyncError: null,
+    });
+    vi.mocked(getTicketCalendarSyncForUser).mockResolvedValue(null);
   });
 
   it("awaits route params and resolves the clicked PMGT ticket by database id", async () => {

@@ -1,11 +1,11 @@
-import { requireUser } from "@/lib/auth";
+import { requireRole } from "@/lib/auth";
 import { getLabelsWithUsage } from "@/server/queries/admin";
 import { LabelManager } from "@/components/settings/label-manager";
 
 export const dynamic = "force-dynamic";
 
 export default async function LabelsSettingsPage() {
-  const user = await requireUser();
+  const user = await requireRole(["ADMIN", "MANAGER"]);
   const labels = await getLabelsWithUsage(user.workspaceId);
 
   return (

@@ -1,6 +1,10 @@
 import { redirect } from "next/navigation";
+import { requireUser } from "@/lib/auth";
+import { canManageProjects } from "@/lib/rbac";
 
-// Settings landing → default to the Projects tab. The layout enforces access.
-export default function SettingsPage() {
-  redirect("/settings/projects");
+// Settings landing → managers to Projects; everyone else to Integrations.
+export default async function SettingsPage() {
+  const user = await requireUser();
+  if (canManageProjects(user.role)) redirect("/settings/projects");
+  redirect("/settings/integrations");
 }

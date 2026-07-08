@@ -27,10 +27,15 @@ import { CommentItem } from "@/components/ticket/comment-item";
 import { ArchiveButton } from "@/components/ticket/archive-button";
 import { AttachmentsSection } from "@/components/ticket/attachments-section";
 import { AddToGoogleCalendarLink } from "@/components/calendar/add-to-google-calendar-link";
+import { TicketGoogleSyncStatus } from "@/components/ticket/ticket-google-sync-status";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  getGoogleCalendarConnectionView,
+  getTicketCalendarSyncForUser,
+} from "@/server/queries/google-calendar";
 
 export const dynamic = "force-dynamic";
 
@@ -61,6 +66,13 @@ export default async function TicketDetailPage({ params }: { params: RouteParams
   const readOnly = isReadOnly(user.role);
   const users = canEdit ? await getAssignableUsers(user.workspaceId) : [];
   const dueValue = dueDateInputValue(ticket.dueDate);
+  const isAssignee = ticket.assigneeId === user.id;
+  const [gcalConnection, ticketSync] = await Promise.all([
+    getGoogleCalendarConnectionView(user.id),
+    isAssignee && dueValue
+      ? getTicketCalendarSyncForUser(user.id, ticket.id)
+      : Promise.resolve(null),
+  ]);
 
   return (
     <div className="mx-auto max-w-5xl space-y-4">
@@ -232,6 +244,12 @@ export default async function TicketDetailPage({ params }: { params: RouteParams
                   />
                 </div>
               ) : null}
+              <TicketGoogleSyncStatus
+                connected={gcalConnection.connected}
+                syncStatus={ticketSync?.status ?? null}
+                isAssignee={isAssignee}
+                hasDueDate={Boolean(dueValue)}
+              />
             </CardContent>
           </Card>
 
