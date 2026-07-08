@@ -33,7 +33,7 @@ export async function changeOwnPasswordAction(
     return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid password." };
   }
 
-  const supabase = createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient();
   const { error } = await supabase.auth.updateUser({ password: parsed.data.password });
   if (error) return { ok: false, error: error.message };
 

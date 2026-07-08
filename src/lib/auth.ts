@@ -14,7 +14,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
  *  - Brand-new, unknown users are created as VIEWER (least privilege by default).
  */
 export async function getCurrentUser(): Promise<User | null> {
-  const supabase = createSupabaseServerClient();
+  const supabase = await createSupabaseServerClient();
   const {
     data: { user: authUser },
   } = await supabase.auth.getUser();

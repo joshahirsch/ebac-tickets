@@ -1,14 +1,20 @@
+import { dirname } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  // Type-checking still runs and will fail the build on type errors.
-  // ESLint style rules are skipped during production builds to avoid
-  // lint-only failures blocking deploys; run `npm run lint` locally instead.
-  eslint: {
-    ignoreDuringBuilds: true,
+
+  // Next 16/Turbopack was inferring C:\Users\Josh_ as the workspace root
+  // because multiple package-lock.json files exist. Pin it to this app folder.
+  turbopack: {
+    root: __dirname,
   },
+
   experimental: {
-    // Server Actions are enabled by default in Next 14; keep body limit generous for attachments metadata.
+    // Keep body limit generous for attachment metadata/server actions.
     serverActions: {
       bodySizeLimit: "5mb",
     },
