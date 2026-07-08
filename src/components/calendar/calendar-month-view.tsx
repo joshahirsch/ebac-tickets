@@ -11,6 +11,11 @@ import {
 import { buildMonthGrid } from "@/lib/calendar/month-grid";
 import { groupTicketsByDueDate } from "@/lib/calendar/group-tickets-by-due-date";
 import {
+  buildAssigneeLegendItems,
+  getAssigneeColorClasses,
+  getAssigneeDisplayName,
+} from "@/lib/calendar/assignee-colors";
+import {
   buildGoogleCalendarUrl,
   ticketDetailUrl,
 } from "@/lib/calendar/google-calendar-url";
@@ -85,6 +90,50 @@ function hrefWithMonth(
   return qs ? `/calendar?${qs}` : `/calendar?month=${yearMonth}`;
 }
 
+function formatDueDateLong(dateOnly: DateOnly): string {
+  const year = Number(dateOnly.slice(0, 4));
+  const month = Number(dateOnly.slice(5, 7));
+  const day = Number(dateOnly.slice(8, 10));
+  const utcNoon = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+  return new Intl.DateTimeFormat("en-US", {
+    month: "long",
+    day: "numeric",
+    timeZone: "UTC",
+  }).format(utcNoon);
+}
+
+function ticketPillLabel(ticket: CalendarTicketView): string {
+  const assigneeName = getAssigneeDisplayName(ticket.assignee);
+  return `${ticket.key}, ${ticket.title}, assigned to ${assigneeName}, due ${formatDueDateLong(ticket.dueDate)}`;
+}
+
+function CalendarAssigneeLegend({ tickets }: { tickets: CalendarTicketView[] }) {
+  const items = buildAssigneeLegendItems(tickets);
+  if (items.length === 0) return null;
+
+  return (
+    <div
+      className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-md border bg-muted/20 px-3 py-2"
+      aria-label="Assignee legend"
+    >
+      <span className="text-xs font-medium text-muted-foreground">Assignees</span>
+      <ul className="flex flex-wrap items-center gap-x-4 gap-y-1">
+        {items.map((item) => (
+          <li key={item.key} className="flex items-center gap-1.5 text-xs text-foreground">
+            <span
+              className={cn("h-2.5 w-2.5 shrink-0 rounded-full", item.colors.swatch)}
+              aria-hidden="true"
+            />
+            <span>
+              {item.displayName} · {item.count}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export function CalendarMonthView({
   yearMonth,
   tickets,
@@ -136,6 +185,8 @@ export function CalendarMonthView({
         </p>
       </div>
 
+      <CalendarAssigneeLegend tickets={tickets} />
+
       <div className="overflow-x-auto rounded-lg border bg-card">
         <div className="grid min-w-[640px] grid-cols-7 border-b bg-muted/40">
           {WEEKDAYS.map((day) => (
@@ -180,22 +231,33 @@ export function CalendarMonthView({
                 </div>
 
                 <ul className="space-y-0.5">
-                  {visible.map((ticket) => (
-                    <li key={ticket.id} className="group flex items-start gap-0.5">
-                      <Link
-                        href={ticket.href}
-                        className={cn(
-                          "min-w-0 flex-1 rounded px-1 py-0.5 text-left text-[11px] leading-snug",
-                          "bg-primary/10 text-foreground hover:bg-primary/20 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
-                        )}
-                        title={`${ticket.key} ${ticket.title}`}
-                      >
-                        <span className="font-medium text-muted-foreground">{ticket.key}</span>{" "}
-                        <span className="line-clamp-1">{ticket.title}</span>
-                      </Link>
-                      <AddToGoogleCalendarLink href={ticket.googleCalendarUrl} compact className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100" />
-                    </li>
-                  ))}
+                  {visible.map((ticket) => {
+                    const assigneeColors = getAssigneeColorClasses(ticket.assignee);
+                    const pillLabel = ticketPillLabel(ticket);
+
+                    return (
+                      <li key={ticket.id} className="group flex items-start gap-0.5">
+                        <Link
+                          href={ticket.href}
+                          className={cn(
+                            "min-w-0 flex-1 rounded border-l-2 px-1 py-0.5 text-left text-[11px] leading-snug",
+                            "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
+                            assigneeColors.pill,
+                          )}
+                          title={pillLabel}
+                          aria-label={pillLabel}
+                        >
+                          <span className="font-medium text-muted-foreground">{ticket.key}</span>{" "}
+                          <span className="line-clamp-1">{ticket.title}</span>
+                        </Link>
+                        <AddToGoogleCalendarLink
+                          href={ticket.googleCalendarUrl}
+                          compact
+                          className="opacity-0 group-hover:opacity-100 focus-visible:opacity-100"
+                        />
+                      </li>
+                    );
+                  })}
                   {overflow > 0 ? (
                     <li className="px-1 text-[10px] text-muted-foreground">+{overflow} more</li>
                   ) : null}

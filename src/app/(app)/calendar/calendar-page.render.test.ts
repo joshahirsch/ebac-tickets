@@ -90,6 +90,11 @@ describe("CalendarPage", () => {
     expect(html).toContain('aria-label="Previous month"');
     expect(html).toContain('aria-label="Next month"');
     expect(html).toContain("Add to Google Calendar");
+    expect(html).toContain('aria-label="Assignee legend"');
+    expect(html).toContain("EBAC Admin · 1");
+    expect(html).toContain("Unassigned · 1");
+    expect(html).toContain("assigned to EBAC Admin");
+    expect(html).toContain("assigned to Unassigned");
   });
 
   it("forwards filters and month to getCalendarTickets", async () => {
