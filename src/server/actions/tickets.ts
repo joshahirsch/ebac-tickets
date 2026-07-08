@@ -276,6 +276,24 @@ export async function updateTicketAction(input: UpdateTicketInput): Promise<Acti
 
 // --- Archive / reopen -------------------------------------------------------
 
+type ArchiveActor = { id: string; name: string | null; email: string };
+
+async function archiveTicketInTx(tx: Prisma.TransactionClient, ticketId: string, actor: ArchiveActor) {
+  await tx.ticket.update({
+    where: { id: ticketId },
+    data: { isArchived: true, archivedAt: new Date(), status: "ARCHIVED" },
+  });
+  await recordActivity({
+    tx,
+    ticketId,
+    actorId: actor.id,
+    type: "TICKET_ARCHIVED",
+    message: `${actor.name ?? actor.email} archived this ticket`,
+  });
+}
+
+export type BulkArchiveResult = ActionResult & { archivedCount?: number; skippedCount?: number };
+
 export async function archiveTicketAction(id: string): Promise<ActionResult> {
   const user = await requireUser();
   try {
@@ -292,24 +310,62 @@ export async function archiveTicketAction(id: string): Promise<ActionResult> {
   if (!existing || existing.project.workspaceId !== user.workspaceId) {
     return { ok: false, error: "Ticket not found." };
   }
+  if (existing.isArchived) {
+    return { ok: true, id };
+  }
 
   await prisma.$transaction(async (tx) => {
-    await tx.ticket.update({
-      where: { id },
-      data: { isArchived: true, archivedAt: new Date(), status: "ARCHIVED" },
-    });
-    await recordActivity({
-      tx,
-      ticketId: id,
-      actorId: user.id,
-      type: "TICKET_ARCHIVED",
-      message: `${user.name ?? user.email} archived this ticket`,
-    });
+    await archiveTicketInTx(tx, id, user);
   });
 
   revalidatePath("/tickets");
   revalidatePath(`/tickets/${id}`);
   return { ok: true, id };
+}
+
+export async function bulkArchiveTicketsAction(ids: string[]): Promise<BulkArchiveResult> {
+  const user = await requireUser();
+  try {
+    assertCan(user.role, "ticket:archive");
+  } catch (e) {
+    if (e instanceof PermissionError) return { ok: false, error: e.message };
+    throw e;
+  }
+
+  const uniqueIds = [...new Set(ids.filter(Boolean))];
+  if (uniqueIds.length === 0) {
+    return { ok: false, error: "No tickets selected." };
+  }
+
+  const tickets = await prisma.ticket.findMany({
+    where: {
+      id: { in: uniqueIds },
+      project: { workspaceId: user.workspaceId ?? undefined },
+      isArchived: false,
+    },
+    select: { id: true },
+  });
+
+  if (tickets.length === 0) {
+    return { ok: false, error: "No archivable tickets found." };
+  }
+
+  await prisma.$transaction(async (tx) => {
+    for (const ticket of tickets) {
+      await archiveTicketInTx(tx, ticket.id, user);
+    }
+  });
+
+  for (const ticket of tickets) {
+    revalidatePath(`/tickets/${ticket.id}`);
+  }
+  revalidatePath("/tickets");
+
+  return {
+    ok: true,
+    archivedCount: tickets.length,
+    skippedCount: uniqueIds.length - tickets.length,
+  };
 }
 
 export async function reopenTicketAction(id: string): Promise<ActionResult> {

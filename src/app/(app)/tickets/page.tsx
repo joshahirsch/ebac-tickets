@@ -68,7 +68,26 @@ export default async function TicketsPage({ searchParams }: { searchParams: SP }
 
       <TicketFilters projects={projects} users={users} />
 
-      <TicketTable tickets={tickets} currentSort={currentSort} sortHref={sortHref} />
+      <TicketTable
+        tickets={tickets.map((t) => ({
+          id: t.id,
+          number: t.number,
+          title: t.title,
+          status: t.status,
+          priority: t.priority,
+          type: t.type,
+          isArchived: t.isArchived,
+          dueDate: t.dueDate?.toISOString() ?? null,
+          updatedAt: t.updatedAt.toISOString(),
+          project: t.project,
+          assignee: t.assignee,
+          labels: t.labels,
+        }))}
+        currentSort={currentSort}
+        sortHref={sortHref}
+        canArchive={can(user.role, "ticket:archive")}
+        viewingArchived={searchParams.status === "ARCHIVED"}
+      />
     </div>
   );
 }
