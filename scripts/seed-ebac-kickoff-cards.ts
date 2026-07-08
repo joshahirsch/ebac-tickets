@@ -22,15 +22,15 @@ import {
   DEFAULT_KICKOFF_PROJECT_KEY,
   EBAC_KICKOFF_CARDS,
   EBAC_WORKSPACE_SLUG,
-  KICKOFF_PHASE_META,
+  KICKOFF_CARD_NUMBERS,
+  KICKOFF_DEFAULT_STATUS,
+  KICKOFF_LABEL_META,
   KICKOFF_PROJECT_KEY_FALLBACKS,
+  collectKickoffLabelNames,
   formatKickoffDescription,
-  kickoffDescriptionNeedsUpdate,
-  mapKickoffPhaseStatus,
   mapKickoffPriority,
   parseKickoffDueDate,
   planKickoffCardSeedAction,
-  type KickoffPhase,
 } from "../src/lib/seed-ebac-kickoff";
 
 const prisma = new PrismaClient();
@@ -39,6 +39,7 @@ type Summary = {
   created: string[];
   updated: string[];
   skipped: string[];
+  archived: string[];
   failed: Array<{ title: string; error: string }>;
 };
 
@@ -47,6 +48,20 @@ function parseArgs(argv: string[]) {
     dryRun: argv.includes("--dry-run"),
     ensureProject: argv.includes("--ensure-project"),
   };
+}
+
+function ticketKey(number: number, title: string): string {
+  return `PMGT-${number}: ${title}`;
+}
+
+function labelsMatch(
+  existingLabelIds: string[],
+  expectedLabelIds: string[],
+): boolean {
+  if (existingLabelIds.length !== expectedLabelIds.length) return false;
+  const existing = [...existingLabelIds].sort();
+  const expected = [...expectedLabelIds].sort();
+  return existing.every((id, index) => id === expected[index]);
 }
 
 async function resolveWorkspace(): Promise<Workspace> {
@@ -105,7 +120,8 @@ async function resolveProject(
         id: "dry-run-project",
         key: preferredKey,
         name: "EBAC Project Management",
-        description: "Kickoff, rollout, and hypercare work for EBAC Projects.",
+        description:
+          "Responsible AI integration and adoption roadmap engagement for East Bay Agency for Children.",
         category: "Operations",
         status: ProjectStatus.ACTIVE,
         workspaceId,
@@ -123,7 +139,8 @@ async function resolveProject(
       create: {
         key: preferredKey,
         name: "EBAC Project Management",
-        description: "Kickoff, rollout, and hypercare work for EBAC Projects.",
+        description:
+          "Responsible AI integration and adoption roadmap engagement for East Bay Agency for Children.",
         category: "Operations",
         status: ProjectStatus.ACTIVE,
         workspaceId,
@@ -147,49 +164,116 @@ async function resolveProject(
   );
 }
 
-async function ensurePhaseLabels(
+async function ensureTopicLabels(
   workspaceId: string,
   dryRun: boolean,
-): Promise<Record<KickoffPhase, TicketLabel>> {
-  const labels = {} as Record<KickoffPhase, TicketLabel>;
+): Promise<Record<string, TicketLabel>> {
+  const labels = {} as Record<string, TicketLabel>;
+  const labelNames = collectKickoffLabelNames(EBAC_KICKOFF_CARDS);
 
-  for (const [phase, meta] of Object.entries(KICKOFF_PHASE_META) as Array<
-    [KickoffPhase, (typeof KICKOFF_PHASE_META)[KickoffPhase]]
-  >) {
-    const labelName = phase;
+  for (const name of labelNames) {
+    const meta = KICKOFF_LABEL_META[name] ?? { color: "#64748b" };
 
     if (dryRun) {
       const existing = await prisma.ticketLabel.findUnique({
-        where: { workspaceId_name: { workspaceId, name: labelName } },
+        where: { workspaceId_name: { workspaceId, name } },
       });
-      labels[phase] =
+      labels[name] =
         existing ??
         ({
-          id: `dry-run-${phase}`,
-          name: labelName,
-          color: meta.labelColor,
+          id: `dry-run-${name}`,
+          name,
+          color: meta.color,
           workspaceId,
           createdAt: new Date(),
         } as TicketLabel);
       continue;
     }
 
-    labels[phase] = await prisma.ticketLabel.upsert({
-      where: { workspaceId_name: { workspaceId, name: labelName } },
-      update: { color: meta.labelColor },
-      create: { name: labelName, color: meta.labelColor, workspaceId },
+    labels[name] = await prisma.ticketLabel.upsert({
+      where: { workspaceId_name: { workspaceId, name } },
+      update: { color: meta.color },
+      create: { name, color: meta.color, workspaceId },
     });
   }
 
   return labels;
 }
 
+async function syncTicketLabels(
+  ticketId: string,
+  expectedLabelIds: string[],
+  dryRun: boolean,
+): Promise<void> {
+  if (dryRun) return;
+
+  await prisma.$transaction(async (tx) => {
+    await tx.ticketLabelOnTicket.deleteMany({
+      where: {
+        ticketId,
+        labelId: { notIn: expectedLabelIds },
+      },
+    });
+
+    for (const labelId of expectedLabelIds) {
+      await tx.ticketLabelOnTicket.upsert({
+        where: {
+          ticketId_labelId: { ticketId, labelId },
+        },
+        update: {},
+        create: { ticketId, labelId },
+      });
+    }
+  });
+}
+
+async function archiveStaleKickoffTickets(
+  projectId: string,
+  dryRun: boolean,
+): Promise<string[]> {
+  const stale = await prisma.ticket.findMany({
+    where: {
+      projectId,
+      isArchived: false,
+      number: { notIn: KICKOFF_CARD_NUMBERS },
+    },
+    select: { id: true, number: true, title: true },
+    orderBy: { number: "asc" },
+  });
+
+  const archived: string[] = [];
+
+  for (const ticket of stale) {
+    const label = ticketKey(ticket.number, ticket.title);
+    if (dryRun) {
+      archived.push(label);
+      console.log(`  archive (dry-run) ${label}`);
+      continue;
+    }
+
+    await prisma.ticket.update({
+      where: { id: ticket.id },
+      data: { isArchived: true },
+    });
+    archived.push(label);
+    console.log(`  archive ${label}`);
+  }
+
+  return archived;
+}
+
 async function seedKickoffCards(dryRun: boolean, ensureProject: boolean): Promise<Summary> {
-  const summary: Summary = { created: [], updated: [], skipped: [], failed: [] };
+  const summary: Summary = {
+    created: [],
+    updated: [],
+    skipped: [],
+    archived: [],
+    failed: [],
+  };
 
   const workspace = await resolveWorkspace();
   const project = await resolveProject(workspace.id, ensureProject, dryRun);
-  const phaseLabels = await ensurePhaseLabels(workspace.id, dryRun);
+  const topicLabels = await ensureTopicLabels(workspace.id, dryRun);
 
   const reporter = await prisma.user.findFirst({
     where: { workspaceId: workspace.id, role: "ADMIN" },
@@ -205,16 +289,16 @@ async function seedKickoffCards(dryRun: boolean, ensureProject: boolean): Promis
   for (const card of EBAC_KICKOFF_CARDS) {
     const description = formatKickoffDescription(card);
     const priority = mapKickoffPriority(card.priority);
-    const status = mapKickoffPhaseStatus(card.phase);
+    const status = KICKOFF_DEFAULT_STATUS;
     const dueDate = parseKickoffDueDate(card.dueDate);
-    const phaseLabel = phaseLabels[card.phase];
+    const expectedLabelIds = card.labels.map((name) => topicLabels[name].id);
+    const cardLabel = ticketKey(card.number, card.title);
 
     try {
       const existing = await prisma.ticket.findFirst({
         where: {
           projectId: project.id,
-          title: card.title,
-          isArchived: false,
+          number: card.number,
         },
         include: {
           labels: { select: { labelId: true } },
@@ -222,70 +306,74 @@ async function seedKickoffCards(dryRun: boolean, ensureProject: boolean): Promis
       });
 
       if (existing) {
-        const hasPhaseLabel = existing.labels.some((l) => l.labelId === phaseLabel.id);
+        const existingLabelIds = existing.labels.map((l) => l.labelId);
         const action = planKickoffCardSeedAction({
+          exists: true,
           existingTitle: existing.title,
+          expectedTitle: card.title,
           existingDescription: existing.description,
           expectedDescription: description,
-          hasPhaseLabel,
+          labelsMatch: labelsMatch(existingLabelIds, expectedLabelIds),
         });
 
-        if (action === "skip") {
-          summary.skipped.push(card.title);
-          console.log(`  skip  ${card.title}`);
+        const fieldsChanged =
+          action === "update" ||
+          existing.priority !== priority ||
+          existing.status !== status ||
+          existing.isArchived ||
+          existing.dueDate?.toISOString() !== dueDate.toISOString();
+
+        if (!fieldsChanged) {
+          summary.skipped.push(cardLabel);
+          console.log(`  skip  ${cardLabel}`);
           continue;
         }
 
-        const descriptionNeedsUpdate = kickoffDescriptionNeedsUpdate(
-          existing.description,
-          description,
-        );
-
         if (dryRun) {
-          summary.updated.push(card.title);
-          const parts = [];
-          if (descriptionNeedsUpdate) parts.push("description");
-          if (!hasPhaseLabel) parts.push("phase label");
-          console.log(`  update (dry-run) ${card.title} [${parts.join(", ")}]`);
+          summary.updated.push(cardLabel);
+          console.log(`  update (dry-run) ${cardLabel}`);
           continue;
         }
 
         await prisma.$transaction(async (tx) => {
-          if (descriptionNeedsUpdate) {
-            await tx.ticket.update({
-              where: { id: existing.id },
-              data: { description },
-            });
-          }
+          await tx.ticket.update({
+            where: { id: existing.id },
+            data: {
+              title: card.title,
+              description,
+              priority,
+              status,
+              dueDate,
+              isArchived: false,
+            },
+          });
 
-          if (!hasPhaseLabel) {
-            await tx.ticketLabelOnTicket.create({
-              data: { ticketId: existing.id, labelId: phaseLabel.id },
+          if (project.ticketSeq < card.number) {
+            await tx.project.update({
+              where: { id: project.id },
+              data: { ticketSeq: card.number },
             });
+            project.ticketSeq = card.number;
           }
         });
 
-        summary.updated.push(card.title);
-        console.log(`  update ${card.title}`);
+        await syncTicketLabels(existing.id, expectedLabelIds, dryRun);
+
+        summary.updated.push(cardLabel);
+        console.log(`  update ${cardLabel}`);
         continue;
       }
 
       if (dryRun) {
-        summary.created.push(card.title);
-        console.log(`  create (dry-run) ${card.title} → ${status} [${card.phase}]`);
+        summary.created.push(cardLabel);
+        console.log(`  create (dry-run) ${cardLabel} → ${status}`);
         continue;
       }
 
       await prisma.$transaction(async (tx) => {
-        const { ticketSeq } = await tx.project.update({
-          where: { id: project.id },
-          data: { ticketSeq: { increment: 1 } },
-          select: { ticketSeq: true },
-        });
-
         const ticket = await tx.ticket.create({
           data: {
-            number: ticketSeq,
+            number: card.number,
             title: card.title,
             description,
             status,
@@ -296,7 +384,7 @@ async function seedKickoffCards(dryRun: boolean, ensureProject: boolean): Promis
             reporterId: reporter?.id ?? null,
             assigneeId: null,
             labels: {
-              create: [{ labelId: phaseLabel.id }],
+              create: expectedLabelIds.map((labelId) => ({ labelId })),
             },
           },
         });
@@ -309,16 +397,28 @@ async function seedKickoffCards(dryRun: boolean, ensureProject: boolean): Promis
             actorId: reporter?.id ?? null,
           },
         });
+
+        if (project.ticketSeq < card.number) {
+          await tx.project.update({
+            where: { id: project.id },
+            data: { ticketSeq: card.number },
+          });
+          project.ticketSeq = card.number;
+        }
       });
 
-      summary.created.push(card.title);
-      console.log(`  create ${card.title} → ${status} [${card.phase}]`);
+      summary.created.push(cardLabel);
+      console.log(`  create ${cardLabel} → ${status}`);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      summary.failed.push({ title: card.title, error: message });
-      console.error(`  fail  ${card.title}: ${message}`);
+      summary.failed.push({ title: cardLabel, error: message });
+      console.error(`  fail  ${cardLabel}: ${message}`);
     }
   }
+
+  console.log("");
+  console.log("Stale cards");
+  summary.archived = await archiveStaleKickoffTickets(project.id, dryRun);
 
   return summary;
 }
@@ -331,10 +431,11 @@ async function main() {
 
     console.log("");
     console.log("Summary");
-    console.log(`  created: ${summary.created.length}`);
-    console.log(`  updated: ${summary.updated.length}`);
-    console.log(`  skipped: ${summary.skipped.length}`);
-    console.log(`  failed:  ${summary.failed.length}`);
+    console.log(`  created:  ${summary.created.length}`);
+    console.log(`  updated:  ${summary.updated.length}`);
+    console.log(`  skipped:  ${summary.skipped.length}`);
+    console.log(`  archived: ${summary.archived.length}`);
+    console.log(`  failed:   ${summary.failed.length}`);
 
     if (summary.failed.length > 0) {
       process.exitCode = 1;

@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   EBAC_KICKOFF_CARDS,
-  KICKOFF_PHASE_META,
+  KICKOFF_CARD_NUMBERS,
+  KICKOFF_DEFAULT_STATUS,
+  KICKOFF_LABEL_META,
+  collectKickoffLabelNames,
   formatKickoffDescription,
   kickoffDescriptionNeedsUpdate,
-  mapKickoffPhaseStatus,
   mapKickoffPriority,
   parseKickoffDueDate,
   planKickoffCardSeedAction,
@@ -17,11 +19,8 @@ describe("seed-ebac-kickoff", () => {
     expect(mapKickoffPriority("P2")).toBe("MEDIUM");
   });
 
-  it("maps phases to backlog/todo statuses", () => {
-    expect(mapKickoffPhaseStatus("kickoff-ready")).toBe("BACKLOG");
-    expect(mapKickoffPhaseStatus("discovery-decisions")).toBe("BACKLOG");
-    expect(mapKickoffPhaseStatus("build-configure")).toBe("TODO");
-    expect(mapKickoffPhaseStatus("post-launch-hypercare")).toBe("TODO");
+  it("defaults engagement cards to backlog status", () => {
+    expect(KICKOFF_DEFAULT_STATUS).toBe("BACKLOG");
   });
 
   it("formats descriptions with purpose, checklist, and acceptance criteria", () => {
@@ -73,12 +72,14 @@ describe("seed-ebac-kickoff", () => {
 
     expect(
       planKickoffCardSeedAction({
+        exists: true,
         existingTitle: "Kickoff agenda",
+        expectedTitle: "Kickoff agenda",
         existingDescription: "",
         expectedDescription: expected,
-        hasPhaseLabel: true,
+        labelsMatch: true,
       }),
-    ).toBe("update-description");
+    ).toBe("update");
   });
 
   it("skips existing seeded cards with the canonical description", () => {
@@ -90,10 +91,12 @@ describe("seed-ebac-kickoff", () => {
 
     expect(
       planKickoffCardSeedAction({
+        exists: true,
         existingTitle: "Kickoff agenda",
+        expectedTitle: "Kickoff agenda",
         existingDescription: expected,
         expectedDescription: expected,
-        hasPhaseLabel: true,
+        labelsMatch: true,
       }),
     ).toBe("skip");
   });
@@ -101,10 +104,12 @@ describe("seed-ebac-kickoff", () => {
   it("plans create when no matching ticket exists", () => {
     expect(
       planKickoffCardSeedAction({
+        exists: false,
         existingTitle: null,
+        expectedTitle: "New card",
         existingDescription: null,
         expectedDescription: "anything",
-        hasPhaseLabel: false,
+        labelsMatch: false,
       }),
     ).toBe("create");
   });
@@ -114,15 +119,27 @@ describe("seed-ebac-kickoff", () => {
     expect(date.toISOString()).toBe("2026-07-13T12:00:00.000Z");
   });
 
-  it("defines unique card titles", () => {
+  it("defines unique card titles and stable PMGT numbers", () => {
     const titles = EBAC_KICKOFF_CARDS.map((card) => card.title);
+    const numbers = EBAC_KICKOFF_CARDS.map((card) => card.number);
     expect(new Set(titles).size).toBe(titles.length);
+    expect(new Set(numbers).size).toBe(numbers.length);
+    expect(numbers).toEqual(KICKOFF_CARD_NUMBERS);
+    expect(numbers).toHaveLength(23);
   });
 
-  it("covers every kickoff phase label", () => {
-    const phases = new Set(EBAC_KICKOFF_CARDS.map((card) => card.phase));
-    for (const phase of Object.keys(KICKOFF_PHASE_META)) {
-      expect(phases.has(phase as keyof typeof KICKOFF_PHASE_META)).toBe(true);
+  it("defines metadata for every referenced kickoff label", () => {
+    const labelNames = collectKickoffLabelNames(EBAC_KICKOFF_CARDS);
+    for (const name of labelNames) {
+      expect(KICKOFF_LABEL_META[name]).toBeDefined();
     }
+  });
+
+  it("covers the EBAC engagement themes instead of ticketing rollout tasks", () => {
+    const titles = EBAC_KICKOFF_CARDS.map((card) => card.title).join(" ");
+    expect(titles).toContain("Draft AI Opportunities Map");
+    expect(titles).toContain("Prepare responsible AI training");
+    expect(titles).not.toContain("Decide who can close tickets");
+    expect(titles).not.toContain("Define ticket status workflow");
   });
 });

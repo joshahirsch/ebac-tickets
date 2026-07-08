@@ -13,7 +13,7 @@ import { TicketTable, type TicketTableItem } from "@/components/ticket/ticket-ta
 const sampleTicket: TicketTableItem = {
   id: "ticket-pmgt-23",
   number: 23,
-  title: "Schedule post-launch review",
+  title: "Close Phase One and capture lessons learned",
   status: "TODO",
   priority: "MEDIUM",
   type: "TASK",
@@ -66,7 +66,7 @@ describe("TicketTable archive controls rendering", () => {
 
     expect(html).toContain('href="/tickets/ticket-pmgt-23"');
     expect(html).toContain("PMGT-23");
-    expect(html).toContain("Schedule post-launch review");
+    expect(html).toContain("Close Phase One and capture lessons learned");
   });
 });
 

@@ -12,62 +12,55 @@ export const DEFAULT_KICKOFF_PROJECT_KEY = "PMGT";
 /** Fallback keys tried when the primary key is not found. */
 export const KICKOFF_PROJECT_KEY_FALLBACKS = ["EBAC", "PMGT"] as const;
 
-export type KickoffPhase =
-  | "kickoff-ready"
-  | "discovery-decisions"
-  | "build-configure"
-  | "uat-validation"
-  | "launch-prep"
-  | "post-launch-hypercare";
-
 export type KickoffPriority = "P0" | "P1" | "P2";
 
 export type KickoffCardDef = {
-  phase: KickoffPhase;
+  /** Stable per-project ticket number (PMGT-{number}). */
+  number: number;
   title: string;
   priority: KickoffPriority;
   dueDate: string; // YYYY-MM-DD
+  labels: string[];
   description: string;
   checklist?: string[];
   acceptanceCriteria?: string[];
   notes?: string;
 };
 
-export const KICKOFF_PHASE_META: Record<
-  KickoffPhase,
-  { label: string; labelColor: string; status: TicketStatus }
-> = {
-  "kickoff-ready": {
-    label: "Kickoff Ready",
-    labelColor: "#0f766e",
-    status: "BACKLOG",
-  },
-  "discovery-decisions": {
-    label: "Discovery / Decisions",
-    labelColor: "#2563eb",
-    status: "BACKLOG",
-  },
-  "build-configure": {
-    label: "Build / Configure",
-    labelColor: "#7c3aed",
-    status: "TODO",
-  },
-  "uat-validation": {
-    label: "UAT / Validation",
-    labelColor: "#d97706",
-    status: "TODO",
-  },
-  "launch-prep": {
-    label: "Launch Prep",
-    labelColor: "#16a34a",
-    status: "TODO",
-  },
-  "post-launch-hypercare": {
-    label: "Post-Launch / Hypercare",
-    labelColor: "#64748b",
-    status: "TODO",
-  },
+export const KICKOFF_LABEL_META: Record<string, { color: string }> = {
+  "kickoff-ready": { color: "#0f766e" },
+  "darian-alignment": { color: "#115e59" },
+  discovery: { color: "#2563eb" },
+  "success-criteria": { color: "#1d4ed8" },
+  governance: { color: "#4338ca" },
+  training: { color: "#7c3aed" },
+  "responsible-ai": { color: "#6d28d9" },
+  survey: { color: "#0891b2" },
+  interviews: { color: "#0e7490" },
+  "project-management": { color: "#64748b" },
+  audit: { color: "#b45309" },
+  "staff-readiness": { color: "#d97706" },
+  synthesis: { color: "#ca8a04" },
+  privacy: { color: "#be123c" },
+  "workflow-mapping": { color: "#059669" },
+  "use-cases": { color: "#047857" },
+  "opportunities-map": { color: "#16a34a" },
+  prioritization: { color: "#15803d" },
+  "quick-wins": { color: "#65a30d" },
+  pilots: { color: "#4d7c0f" },
+  deliverable: { color: "#0f766e" },
+  "phase-two": { color: "#0369a1" },
+  pricing: { color: "#075985" },
+  presentation: { color: "#7c3aed" },
+  "final-debrief": { color: "#6d28d9" },
+  "check-ins": { color: "#475569" },
+  handoff: { color: "#334155" },
+  closeout: { color: "#1e293b" },
+  "reusable-assets": { color: "#57534e" },
 };
+
+/** All PMGT engagement cards ship in Backlog until work begins. */
+export const KICKOFF_DEFAULT_STATUS: TicketStatus = "BACKLOG";
 
 export function mapKickoffPriority(priority: KickoffPriority): TicketPriority {
   switch (priority) {
@@ -78,10 +71,6 @@ export function mapKickoffPriority(priority: KickoffPriority): TicketPriority {
     case "P2":
       return "MEDIUM";
   }
-}
-
-export function mapKickoffPhaseStatus(phase: KickoffPhase): TicketStatus {
-  return KICKOFF_PHASE_META[phase].status;
 }
 
 export function formatKickoffDescription(card: Pick<
@@ -131,536 +120,555 @@ export function kickoffDescriptionNeedsUpdate(
   return existing !== expectedDescription;
 }
 
-export type KickoffSeedPlan = "create" | "update-description" | "skip";
+export type KickoffSeedPlan = "create" | "update" | "skip";
 
 export function planKickoffCardSeedAction(input: {
+  exists: boolean;
   existingTitle: string | null;
+  expectedTitle: string;
   existingDescription: string | null | undefined;
   expectedDescription: string;
-  hasPhaseLabel: boolean;
+  labelsMatch: boolean;
 }): KickoffSeedPlan {
-  if (!input.existingTitle) return "create";
+  if (!input.exists) return "create";
   if (
+    input.existingTitle !== input.expectedTitle ||
     kickoffDescriptionNeedsUpdate(input.existingDescription, input.expectedDescription) ||
-    !input.hasPhaseLabel
+    !input.labelsMatch
   ) {
-    return "update-description";
+    return "update";
   }
   return "skip";
+}
+
+export function collectKickoffLabelNames(cards: KickoffCardDef[]): string[] {
+  return [...new Set(cards.flatMap((card) => card.labels))].sort();
 }
 
 export { parseFormDateOnly as parseKickoffDueDate } from "@/lib/date/date-only";
 
 export const EBAC_KICKOFF_CARDS: KickoffCardDef[] = [
-  // A. Kickoff Ready
+  // PHASE 1 — Kickoff and alignment
   {
-    phase: "kickoff-ready",
-    title: "Kickoff agenda and desired outcomes",
+    number: 1,
+    title: "Align Josh / Darian project roles and communication rhythm",
     priority: "P0",
     dueDate: "2026-07-12",
+    labels: ["kickoff-ready", "darian-alignment"],
     description:
-      "Prepare and run the official EBAC project kickoff on Monday, July 13, 2026. The meeting should align stakeholders on project goals, user roles, ticket workflow, success criteria, launch timeline, open decisions, and immediate next steps.",
+      "Clarify how Josh and Darian will divide client-facing responsibilities, internal review, delivery ownership, and escalation during the EBAC engagement.",
     checklist: [
-      "Confirm attendees",
-      "Confirm meeting objective",
-      "Review current pain points",
-      "Review proposed workflow",
-      "Confirm ticket categories",
-      "Confirm statuses and priorities",
-      "Confirm permissions model",
-      "Identify pilot users",
-      "Identify launch risks",
-      "Assign next steps",
+      "Confirm Josh's role as AI Adoption and Technical Opportunity Lead / client-facing co-lead.",
+      "Confirm Darian's role as relationship lead, final reviewer, and project owner.",
+      "Define client communication rhythm.",
+      "Define internal review cadence.",
+      "Confirm where decisions, notes, and deliverables will live.",
     ],
     acceptanceCriteria: [
-      "Kickoff agenda is ready before the meeting.",
-      "Required decisions are captured.",
-      "Owners are assigned for next steps.",
-      "Open questions are moved into board cards.",
+      "Role split is documented.",
+      "Communication rhythm is agreed.",
+      "Internal handoff process is clear.",
+      "Darian and Josh both know who owns each major deliverable.",
     ],
   },
   {
-    phase: "kickoff-ready",
-    title: "Confirm EBAC stakeholder roster",
+    number: 2,
+    title: "Build EBAC stakeholder and interview map",
     priority: "P0",
     dueDate: "2026-07-12",
+    labels: ["kickoff-ready", "discovery"],
     description:
-      "Identify everyone who needs to participate in kickoff, approve workflow decisions, use the system, or receive launch communications.",
+      "Identify who needs to participate in kickoff, discovery, survey, interviews, and final review.",
     checklist: [
-      "Identify executive/project sponsor",
-      "Identify day-to-day EBAC lead",
-      "Identify managers/team leads",
-      "Identify daily users",
-      "Identify admin users",
-      "Identify escalation contacts",
-      "Confirm emails for each stakeholder",
-      "Confirm who needs access before kickoff",
+      "Draft stakeholder list.",
+      "Group stakeholders by role, program, or decision authority.",
+      "Identify must-interview leaders.",
+      "Identify optional contributors.",
+      "Flag missing stakeholders for Darian/client follow-up.",
     ],
     acceptanceCriteria: [
-      "Stakeholder roster is documented.",
-      "Each stakeholder has a role or purpose.",
-      "Missing contacts are flagged.",
+      "Stakeholder list is ready for client review.",
+      "Interview targets are prioritized.",
+      "Missing contacts are documented.",
+      "Discovery schedule can be built from the map.",
     ],
   },
   {
-    phase: "kickoff-ready",
+    number: 3,
     title: "Define project success criteria",
     priority: "P0",
     dueDate: "2026-07-13",
+    labels: ["kickoff-ready", "success-criteria"],
     description:
-      "Agree on what a successful EBAC ticketing/project-management rollout means. Use this to prevent the launch from becoming only a technical deployment without clear operational outcomes.",
+      "Create a shared definition of what successful Phase One delivery means for EBAC, Josh, and Darian.",
     checklist: [
-      "Define operational goals",
-      "Define reporting goals",
-      "Define adoption expectations",
-      "Define visibility expectations",
-      "Define what should improve versus the current process",
-      "Identify success metrics for first 30 days",
+      "Define what EBAC should have at the end of Phase One.",
+      "Confirm what \"AI readiness\" means in this context.",
+      "Define what makes the AI Opportunities Map useful.",
+      "Identify success metrics for training, discovery, and roadmap delivery.",
+      "Document open assumptions.",
     ],
     acceptanceCriteria: [
-      "Leadership agrees on 3 to 5 success criteria.",
-      "Criteria are specific enough to validate after launch.",
-      "Any open disagreements are captured as follow-up cards.",
-    ],
-  },
-  // B. Discovery / Decisions
-  {
-    phase: "discovery-decisions",
-    title: "Map current request and ticket workflow",
-    priority: "P0",
-    dueDate: "2026-07-13",
-    description:
-      "Document how EBAC requests, issues, and internal tasks are currently submitted, triaged, assigned, tracked, escalated, and closed.",
-    checklist: [
-      "Identify current intake channels",
-      "Identify who triages new work",
-      "Identify common request types",
-      "Identify current bottlenecks",
-      "Identify common failure points",
-      "Identify current reporting gaps",
-      "Identify what should change in the new workflow",
-    ],
-    acceptanceCriteria: [
-      "Current-state workflow is documented.",
-      "Pain points are captured.",
-      "Desired future-state changes are identified.",
+      "Success criteria are written in client-facing language.",
+      "Criteria connect to the final AI Opportunities Map.",
+      "Criteria distinguish Phase One discovery from Phase Two implementation.",
+      "Open decisions are visible.",
     ],
   },
   {
-    phase: "discovery-decisions",
-    title: "Define ticket types and categories",
-    priority: "P0",
-    dueDate: "2026-07-13",
-    description:
-      "Finalize the categories users will select when creating or triaging tickets.",
-    notes:
-      "Suggested categories:\n\n- General Support\n- Program Operations\n- Facilities\n- Finance / Billing\n- Administrative\n- External Partner\n- Urgent Issue\n- Reporting / Data\n- Access / Permission\n- Other",
-    checklist: [
-      "Review suggested categories",
-      "Remove categories that are not needed",
-      "Add missing EBAC-specific categories",
-      "Decide whether categories should map to owners",
-      "Decide whether categories should influence priority or SLA",
-    ],
-    acceptanceCriteria: [
-      "Final category list is approved.",
-      "Category definitions are clear enough for users.",
-      "Any category-to-owner rules are documented.",
-    ],
-  },
-  {
-    phase: "discovery-decisions",
-    title: "Define ticket status workflow",
-    priority: "P0",
-    dueDate: "2026-07-13",
-    description:
-      "Finalize the statuses that tickets/cards should move through from creation to completion.",
-    notes:
-      "Suggested statuses:\n\n- New\n- Triage\n- Assigned\n- In Progress\n- Waiting\n- Blocked\n- Done\n- Archived",
-    checklist: [
-      "Confirm status names",
-      "Define what each status means",
-      "Define who can move tickets between statuses",
-      "Define when a ticket is considered blocked",
-      "Define when a ticket is considered done",
-      "Define when a ticket should be archived",
-    ],
-    acceptanceCriteria: [
-      "Final status workflow is approved.",
-      "Status definitions are documented.",
-      "Blocked, done, and archived rules are clear.",
-    ],
-  },
-  {
-    phase: "discovery-decisions",
-    title: "Define priority and SLA rules",
-    priority: "P0",
-    dueDate: "2026-07-13",
-    description:
-      "Agree on how EBAC will classify urgency and what expected response/resolution targets apply to each priority.",
-    notes:
-      "Suggested priorities:\n\n- Urgent\n- High\n- Normal\n- Low",
-    checklist: [
-      "Define urgent",
-      "Define high",
-      "Define normal",
-      "Define low",
-      "Decide response-time expectations",
-      "Decide resolution-time expectations",
-      "Decide escalation rules for overdue urgent/high tickets",
-    ],
-    acceptanceCriteria: [
-      "Priority definitions are approved.",
-      "SLA expectations are documented.",
-      "Escalation rules are clear.",
-    ],
-  },
-  {
-    phase: "discovery-decisions",
-    title: "Confirm roles and permissions",
-    priority: "P0",
-    dueDate: "2026-07-13",
-    description:
-      "Define who can create, assign, edit, comment, close, archive, view dashboards, and manage users.",
-    checklist: [
-      "Identify admin users",
-      "Identify manager users",
-      "Identify standard users",
-      "Identify read-only users if needed",
-      "Confirm who can create tickets",
-      "Confirm who can assign tickets",
-      "Confirm who can close tickets",
-      "Confirm who can archive tickets",
-      "Confirm who can view dashboards",
-      "Confirm who can manage users",
-    ],
-    acceptanceCriteria: [
-      "Permission model is approved.",
-      "Initial access levels are documented.",
-      "Any edge cases are captured.",
-    ],
-  },
-  {
-    phase: "discovery-decisions",
-    title: "Decide who can create tickets",
-    priority: "P1",
-    dueDate: "2026-07-13",
-    description:
-      "Decide whether all users, managers only, admins only, or selected requestors can create tickets.",
-    checklist: [
-      "Review current intake channels and who submits work today",
-      "List candidate creation rules (all users, managers, admins, selected requestors)",
-      "Confirm exceptions for urgent or sensitive requests",
-      "Document the approved creation rule",
-    ],
-    acceptanceCriteria: [
-      "Ticket creation rule is documented.",
-      "Any exceptions are captured.",
-    ],
-  },
-  {
-    phase: "discovery-decisions",
-    title: "Decide who can assign tickets",
-    priority: "P1",
-    dueDate: "2026-07-13",
-    description:
-      "Decide whether assignment is limited to admins/managers or available to broader users.",
-    checklist: [
-      "Review who triages and assigns work today",
-      "Decide whether assignees can reassign tickets",
-      "Confirm whether team leads can assign within their team",
-      "Document the approved assignment rule",
-    ],
-    acceptanceCriteria: [
-      "Assignment rule is documented.",
-      "Assignment permission aligns with EBAC workflow.",
-    ],
-  },
-  {
-    phase: "discovery-decisions",
-    title: "Decide who can close tickets",
-    priority: "P1",
-    dueDate: "2026-07-13",
-    description:
-      "Decide whether tickets can be closed by the assignee, requester, manager, or admin only.",
-    checklist: [
-      "Define who can mark a ticket done or closed",
-      "Decide whether requesters can close their own tickets",
-      "Confirm reopen rules after closure",
-      "Document the approved closure rule",
-    ],
-    acceptanceCriteria: [
-      "Closure rule is documented.",
-      "Reopen behavior is documented if needed.",
-    ],
-  },
-  {
-    phase: "discovery-decisions",
-    title: "Decide dashboard audience",
+    number: 4,
+    title: "Create project decision protocol",
     priority: "P1",
     dueDate: "2026-07-15",
+    labels: ["kickoff-ready", "governance"],
     description:
-      "Decide who should see operational dashboards and what information each audience should be able to view.",
+      "Define how recommendations, risks, scope questions, and client decisions will be captured and resolved.",
     checklist: [
-      "List dashboard audiences (leadership, managers, staff, read-only viewers)",
-      "Identify metrics each audience needs",
-      "Flag any sensitive data that should be restricted",
-      "Document approved dashboard visibility rules",
+      "Define decision log format.",
+      "Identify who approves scope changes.",
+      "Define how risk decisions are escalated.",
+      "Define how Darian reviews Josh-drafted deliverables.",
+      "Add decision protocol to project workspace.",
     ],
     acceptanceCriteria: [
-      "Dashboard audience is approved.",
-      "Any sensitive visibility restrictions are documented.",
+      "Decision log exists.",
+      "Approval owner is clear.",
+      "Review process is documented.",
+      "Project team has one source of truth for decisions.",
     ],
   },
-  // C. Build / Configure
+  // PHASE 2 — Training and discovery design
   {
-    phase: "build-configure",
-    title: "Build initial user and access list",
+    number: 5,
+    title: "Prepare responsible AI training for children's services context",
     priority: "P1",
-    dueDate: "2026-07-15",
+    dueDate: "2026-07-19",
+    labels: ["training", "responsible-ai"],
     description:
-      "Collect names, emails, departments, roles, and permission levels for users who need access before launch.",
+      "Develop the initial AI training content for EBAC staff, focused on practical use, responsible adoption, privacy, risk, and realistic nonprofit workflows.",
     checklist: [
-      "Collect user names",
-      "Collect email addresses",
-      "Assign permission levels",
-      "Identify admins",
-      "Identify managers",
-      "Identify standard users",
-      "Identify read-only users if needed",
-      "Confirm who needs access before pilot",
-      "Confirm who can wait until full rollout",
+      "Draft training outline.",
+      "Include examples relevant to children's services and nonprofit operations.",
+      "Add responsible AI guardrails.",
+      "Include practical use cases and limitations.",
+      "Prepare discussion prompts for staff input.",
     ],
     acceptanceCriteria: [
-      "Initial access list is complete.",
-      "Missing user information is flagged.",
-      "Access list is ready for configuration.",
-    ],
-  },
-  {
-    phase: "build-configure",
-    title: "Define notification rules",
-    priority: "P1",
-    dueDate: "2026-07-15",
-    description:
-      "Decide what events should generate notifications and who should receive them.",
-    notes:
-      "Suggested notification triggers:\n\n- New ticket assigned\n- Comment added\n- Status changed\n- Due date approaching\n- Ticket overdue\n- Ticket blocked\n- User mentioned\n- Ticket closed",
-    checklist: [
-      "Confirm required notification triggers",
-      "Confirm recipients for each trigger",
-      "Confirm whether email notifications are needed",
-      "Confirm whether in-app notifications are sufficient",
-      "Confirm notification volume concerns",
-    ],
-    acceptanceCriteria: [
-      "Notification rules are documented.",
-      "Trigger and recipient rules are clear.",
-      "Any email requirements are captured.",
+      "Training outline is client-ready.",
+      "Content avoids hype and focuses on responsible use.",
+      "Examples are relevant to EBAC's environment.",
+      "Training can feed directly into discovery themes.",
     ],
   },
   {
-    phase: "build-configure",
-    title: "Define dashboard and reporting needs",
-    priority: "P1",
-    dueDate: "2026-07-15",
+    number: 6,
+    title: "Draft staff AI usage survey",
+    priority: "P0",
+    dueDate: "2026-07-19",
+    labels: ["survey", "discovery"],
     description:
-      "Confirm what EBAC leadership and managers need to see on dashboards and reports.",
-    notes:
-      "Suggested dashboard items:\n\n- Open tickets\n- Due this week\n- Overdue tickets\n- Blocked tickets\n- Tickets by status\n- Open tickets by assignee\n- Tickets by category\n- Aging tickets\n- Recently completed tickets",
+      "Create a survey that captures current AI usage, comfort level, perceived risks, workflow pain points, and priority opportunities across EBAC.",
     checklist: [
-      "Confirm required metrics",
-      "Confirm dashboard audience",
-      "Confirm export needs",
-      "Confirm reporting cadence",
-      "Confirm whether historical trends are needed",
+      "Draft survey questions.",
+      "Include current usage questions.",
+      "Include readiness and comfort questions.",
+      "Include workflow bottleneck questions.",
+      "Include risk/privacy/governance questions.",
+      "Review with Darian before client release.",
     ],
     acceptanceCriteria: [
-      "Reporting requirements are documented.",
-      "Dashboard MVP is clearly defined.",
-      "Nice-to-have reports are separated from launch requirements.",
-    ],
-  },
-  // D. UAT / Validation
-  {
-    phase: "uat-validation",
-    title: "Create UAT test scenarios",
-    priority: "P1",
-    dueDate: "2026-07-17",
-    description:
-      "Create acceptance tests for the EBAC rollout so pilot users can validate the system before go-live.",
-    checklist: [
-      "Test ticket creation",
-      "Test ticket assignment",
-      "Test status changes",
-      "Test priority changes",
-      "Test due dates",
-      "Test comments",
-      "Test filtering",
-      "Test dashboard counts",
-      "Test permissions",
-      "Test archiving",
-      "Test notifications if available",
-    ],
-    acceptanceCriteria: [
-      "UAT scenarios cover core workflows.",
-      "Each scenario has expected results.",
-      "Failed scenarios can be logged as board cards.",
+      "Survey is ready for EBAC approval.",
+      "Questions are clear for non-technical staff.",
+      "Survey output can support the audit and Opportunities Map.",
+      "Darian review is complete.",
     ],
   },
   {
-    phase: "uat-validation",
-    title: "Select pilot users",
-    priority: "P1",
-    dueDate: "2026-07-17",
-    description:
-      "Identify a small group of EBAC users to validate the system before full rollout.",
-    checklist: [
-      "Select one admin/power user",
-      "Select one manager/team lead",
-      "Select one standard user",
-      "Select one user likely to submit requests",
-      "Confirm availability for UAT",
-      "Confirm feedback expectations",
-    ],
-    acceptanceCriteria: [
-      "Pilot user list is approved.",
-      "Users understand their testing role.",
-      "UAT timing is confirmed.",
-    ],
-  },
-  {
-    phase: "uat-validation",
-    title: "Run pilot UAT and capture findings",
-    priority: "P1",
+    number: 7,
+    title: "Draft interview guide for key informants",
+    priority: "P0",
     dueDate: "2026-07-22",
+    labels: ["interviews", "discovery"],
     description:
-      "Have pilot users test the system and capture issues, confusion, missing fields, workflow problems, and improvement ideas.",
+      "Create a structured interview guide for leaders and staff to uncover operational pain points, AI opportunities, data/tool constraints, and governance concerns.",
     checklist: [
-      "Run through UAT scenarios",
-      "Capture bugs",
-      "Capture workflow gaps",
-      "Capture training questions",
-      "Capture dashboard/reporting gaps",
-      "Separate blockers from nice-to-haves",
-      "Assign owners for fixes",
+      "Draft core interview questions.",
+      "Add role-specific probes.",
+      "Include workflow and handoff questions.",
+      "Include risk, data, and privacy questions.",
+      "Include opportunity ranking prompts.",
+      "Review with Darian.",
     ],
     acceptanceCriteria: [
-      "Pilot testing is complete.",
-      "Findings are documented.",
-      "Launch blockers are clearly identified.",
+      "Interview guide is ready for use.",
+      "Questions support consistent synthesis.",
+      "Guide can be used by Josh independently.",
+      "Darian has approved or edited the guide.",
     ],
   },
-  // E. Launch Prep
   {
-    phase: "launch-prep",
-    title: "Draft training guide and quick-start SOP",
+    number: 8,
+    title: "Confirm discovery schedule and interview logistics",
     priority: "P1",
-    dueDate: "2026-07-20",
+    dueDate: "2026-07-26",
+    labels: ["interviews", "project-management"],
     description:
-      "Create a simple user guide for EBAC users explaining how to create, update, filter, assign, comment on, and close tickets.",
+      "Turn the stakeholder map, survey, and interview guide into a working discovery plan.",
     checklist: [
-      "Explain when to create a ticket",
-      "Explain how to create a ticket",
-      "Explain how to choose category and priority",
-      "Explain how to assign or request assignment",
-      "Explain how to update status",
-      "Explain how to comment",
-      "Explain how to close a ticket",
-      "Explain how managers should use dashboards",
-      "Add screenshots if practical",
+      "Confirm interview targets.",
+      "Confirm interview windows.",
+      "Identify scheduling owner.",
+      "Prepare calendar/email language if needed.",
+      "Track completed and pending interviews.",
     ],
     acceptanceCriteria: [
-      "Guide is short enough for users to actually read.",
-      "Core workflows are covered.",
-      "Guide can be shared before launch.",
+      "Discovery calendar is usable.",
+      "Interview owners are assigned.",
+      "Scheduling gaps are visible.",
+      "Josh knows which interviews he is leading solo.",
     ],
   },
+  // PHASE 3 — Audit and discovery execution
   {
-    phase: "launch-prep",
-    title: "Define go-live criteria",
+    number: 9,
+    title: "Run current AI usage and readiness audit",
     priority: "P1",
-    dueDate: "2026-07-20",
+    dueDate: "2026-08-02",
+    labels: ["audit", "staff-readiness"],
     description:
-      "Agree on what must be true before EBAC moves from pilot/testing to live usage.",
-    notes:
-      "Suggested go-live criteria:\n\n- Stakeholders approved workflow\n- Roles and permissions configured\n- Initial users loaded\n- Ticket categories finalized\n- Status workflow finalized\n- Dashboard MVP working\n- UAT blockers resolved\n- Training guide ready\n- Support/feedback process defined",
+      "Capture how EBAC staff currently use AI, where adoption is happening informally, and what readiness gaps exist.",
     checklist: [
-      "Confirm required launch criteria",
-      "Separate launch blockers from post-launch improvements",
-      "Assign owners for open blockers",
-      "Confirm launch decision owner",
+      "Review survey results.",
+      "Summarize current usage patterns.",
+      "Identify high-comfort and low-comfort groups.",
+      "Identify training needs.",
+      "Capture concerns and misconceptions.",
     ],
     acceptanceCriteria: [
-      "Go-live checklist is approved.",
-      "Launch blockers are visible.",
-      "Decision owner is identified.",
+      "Current AI usage themes are summarized.",
+      "Readiness gaps are documented.",
+      "Findings are tied to program/workflow context.",
+      "Output can feed the audit report and Opportunities Map.",
     ],
   },
   {
-    phase: "launch-prep",
-    title: "Prepare launch communications",
-    priority: "P2",
-    dueDate: "2026-07-22",
+    number: 10,
+    title: "Complete key informant interviews",
+    priority: "P1",
+    dueDate: "2026-08-05",
+    labels: ["interviews", "synthesis"],
     description:
-      "Prepare the message that will tell EBAC users when and how to start using the project management/ticketing board.",
+      "Conduct and synthesize interviews with priority EBAC stakeholders.",
     checklist: [
-      "Draft launch email/message",
-      "Include system purpose",
-      "Include who should use it",
-      "Include what should be submitted",
-      "Include quick-start guide link",
-      "Include support contact",
-      "Include launch date",
-      "Include feedback instructions",
+      "Complete assigned interviews.",
+      "Capture notes in consistent format.",
+      "Tag themes by workflow, opportunity, risk, and readiness.",
+      "Identify repeated pain points.",
+      "Identify standout use cases.",
     ],
     acceptanceCriteria: [
-      "Launch communication is drafted.",
-      "EBAC lead approves message.",
-      "Message is ready to send.",
-    ],
-  },
-  // F. Post-Launch / Hypercare
-  {
-    phase: "post-launch-hypercare",
-    title: "Create post-launch feedback channel",
-    priority: "P2",
-    dueDate: "2026-07-22",
-    description:
-      "Define where users should report issues, confusion, bugs, or suggested improvements after launch.",
-    checklist: [
-      "Decide where feedback should go",
-      "Decide who triages feedback",
-      "Decide how bugs become tickets",
-      "Decide how enhancement requests are prioritized",
-      "Decide expected response time during hypercare",
-    ],
-    acceptanceCriteria: [
-      "Feedback process is documented.",
-      "Users know where to report issues.",
-      "Owner is assigned for triage.",
+      "Priority interviews are completed or blockers documented.",
+      "Notes are organized for synthesis.",
+      "Themes are ready for Darian review.",
+      "Major opportunities and risks are visible.",
     ],
   },
   {
-    phase: "post-launch-hypercare",
-    title: "Schedule post-launch review",
-    priority: "P2",
-    dueDate: "2026-07-27",
+    number: 11,
+    title: "Inventory tools, data, privacy, and governance constraints",
+    priority: "P0",
+    dueDate: "2026-08-02",
+    labels: ["audit", "governance", "privacy"],
     description:
-      "Schedule a review after initial usage to identify adoption issues, process problems, reporting gaps, and needed enhancements.",
+      "Understand EBAC's current systems, data sensitivity, privacy considerations, and governance posture so recommendations are practical and responsible.",
     checklist: [
-      "Schedule review meeting",
-      "Invite EBAC lead and pilot users",
-      "Review ticket volume",
-      "Review overdue/blocked tickets",
-      "Review user feedback",
-      "Review reporting gaps",
-      "Decide next improvements",
+      "List relevant tools/platforms.",
+      "Capture AI-related policies or absence of policies.",
+      "Identify sensitive data concerns.",
+      "Identify approval/compliance constraints.",
+      "Note integration or access limitations.",
     ],
     acceptanceCriteria: [
-      "Review is scheduled.",
-      "Review agenda is defined.",
-      "Initial success metrics will be reviewed.",
+      "Tool and data inventory is documented.",
+      "Privacy and governance gaps are clear.",
+      "Recommendations can be filtered by feasibility and risk.",
+      "Phase Two dependencies are visible.",
+    ],
+  },
+  {
+    number: 12,
+    title: "Analyze staff survey results",
+    priority: "P1",
+    dueDate: "2026-08-09",
+    labels: ["survey", "synthesis"],
+    description:
+      "Convert staff survey responses into actionable themes for readiness, pain points, risks, and AI opportunity areas.",
+    checklist: [
+      "Export or summarize survey responses.",
+      "Identify top pain points.",
+      "Identify top opportunity areas.",
+      "Identify adoption concerns.",
+      "Pull representative themes without overquoting.",
+      "Prepare synthesis for Darian.",
+    ],
+    acceptanceCriteria: [
+      "Survey themes are summarized.",
+      "Findings are grouped by opportunity, readiness, and risk.",
+      "Insights can be used in client deliverables.",
+      "Darian can review without reading every raw response.",
+    ],
+  },
+  // PHASE 4 — Workflow and opportunity mapping
+  {
+    number: 13,
+    title: "Map priority workflows and pain points",
+    priority: "P1",
+    dueDate: "2026-08-16",
+    labels: ["workflow-mapping", "discovery"],
+    description:
+      "Document the workflows where AI may reduce friction, improve consistency, or support staff capacity.",
+    checklist: [
+      "Identify priority workflows from interviews and survey.",
+      "Map current-state steps.",
+      "Identify bottlenecks and repetitive tasks.",
+      "Identify human judgment points.",
+      "Identify where AI should not be used.",
+    ],
+    acceptanceCriteria: [
+      "Priority workflows are mapped.",
+      "Pain points are specific.",
+      "Human oversight points are clear.",
+      "Workflow maps support opportunity scoring.",
+    ],
+  },
+  {
+    number: 14,
+    title: "Build AI use-case inventory",
+    priority: "P1",
+    dueDate: "2026-08-19",
+    labels: ["use-cases", "opportunities-map"],
+    description:
+      "Create a structured inventory of potential AI use cases from training, survey, interviews, and workflow mapping.",
+    checklist: [
+      "Capture all candidate use cases.",
+      "Group by department, workflow, or function.",
+      "Note user need and expected benefit.",
+      "Note complexity, risk, and dependencies.",
+      "Remove duplicates.",
+    ],
+    acceptanceCriteria: [
+      "Use-case inventory is complete enough for scoring.",
+      "Each use case has a clear problem statement.",
+      "Risks and dependencies are visible.",
+      "Duplicates are merged.",
+    ],
+  },
+  {
+    number: 15,
+    title: "Score and prioritize AI opportunities",
+    priority: "P0",
+    dueDate: "2026-08-23",
+    labels: ["prioritization", "opportunities-map"],
+    description:
+      "Rank AI use cases by value, feasibility, risk, urgency, and readiness so EBAC can make practical decisions.",
+    checklist: [
+      "Define scoring criteria.",
+      "Score candidate use cases.",
+      "Identify quick wins.",
+      "Identify medium-term pilots.",
+      "Identify high-risk or defer candidates.",
+      "Review prioritization with Darian.",
+    ],
+    acceptanceCriteria: [
+      "Prioritized opportunity list is complete.",
+      "Quick wins and pilots are separated.",
+      "Risk is included in prioritization.",
+      "Darian has reviewed the scoring logic.",
+    ],
+  },
+  {
+    number: 16,
+    title: "Draft quick wins and pilot recommendations",
+    priority: "P1",
+    dueDate: "2026-08-26",
+    labels: ["quick-wins", "pilots"],
+    description:
+      "Translate the opportunity scoring into practical next moves EBAC can understand and act on.",
+    checklist: [
+      "Identify low-risk quick wins.",
+      "Identify 2–4 pilot candidates.",
+      "Define expected benefit for each.",
+      "Define owner, effort, and dependency assumptions.",
+      "Include risks and safeguards.",
+    ],
+    acceptanceCriteria: [
+      "Quick wins are specific and actionable.",
+      "Pilot recommendations are realistic.",
+      "Recommendations include risk controls.",
+      "Output can drop into the AI Opportunities Map.",
+    ],
+  },
+  // PHASE 5 — Deliverables and roadmap
+  {
+    number: 17,
+    title: "Draft organizational AI audit findings",
+    priority: "P1",
+    dueDate: "2026-08-30",
+    labels: ["audit", "deliverable"],
+    description:
+      "Create the first synthesis of EBAC's current AI landscape, readiness, risks, and operational opportunity areas.",
+    checklist: [
+      "Summarize current AI usage.",
+      "Summarize readiness themes.",
+      "Summarize governance and privacy gaps.",
+      "Summarize workflow pain points.",
+      "Include implications for responsible adoption.",
+    ],
+    acceptanceCriteria: [
+      "Findings are written in client-facing language.",
+      "Findings are evidence-based from discovery.",
+      "Findings distinguish observation from recommendation.",
+      "Draft is ready for Darian review.",
+    ],
+  },
+  {
+    number: 18,
+    title: "Draft AI Opportunities Map",
+    priority: "P0",
+    dueDate: "2026-09-02",
+    labels: ["opportunities-map", "deliverable"],
+    description:
+      "Create the anchor Phase One deliverable: a prioritized map of AI opportunities, implementation paths, risks, sequencing, and next steps.",
+    checklist: [
+      "Add opportunity categories.",
+      "Add scored/prioritized use cases.",
+      "Add quick wins.",
+      "Add pilot recommendations.",
+      "Add governance recommendations.",
+      "Add technical roadmap.",
+      "Add Phase Two implementation options.",
+    ],
+    acceptanceCriteria: [
+      "Opportunities Map is coherent as a standalone deliverable.",
+      "Recommendations are prioritized and sequenced.",
+      "Risks and safeguards are included.",
+      "Draft is ready for Darian review.",
+    ],
+  },
+  {
+    number: 19,
+    title: "Build Phase Two implementation menu",
+    priority: "P1",
+    dueDate: "2026-09-06",
+    labels: ["phase-two", "pricing"],
+    description:
+      "Define realistic next-phase options EBAC can choose from after the Phase One audit and roadmap.",
+    checklist: [
+      "Identify implementation workstreams.",
+      "Define light, standard, and premium options if useful.",
+      "Estimate effort and sequencing.",
+      "Identify dependencies.",
+      "Include pricing assumptions if available.",
+    ],
+    acceptanceCriteria: [
+      "Phase Two menu is clear.",
+      "Options connect directly to Phase One findings.",
+      "Scope boundaries are visible.",
+      "Darian can use the menu in client follow-up.",
+    ],
+  },
+  {
+    number: 20,
+    title: "Prepare final presentation and debrief",
+    priority: "P1",
+    dueDate: "2026-09-09",
+    labels: ["presentation", "final-debrief"],
+    description:
+      "Turn the audit findings and Opportunities Map into a clear final client presentation.",
+    checklist: [
+      "Draft presentation outline.",
+      "Include executive summary.",
+      "Include top findings.",
+      "Include priority opportunities.",
+      "Include recommended next steps.",
+      "Include Phase Two options.",
+      "Review with Darian.",
+    ],
+    acceptanceCriteria: [
+      "Presentation is client-ready.",
+      "Storyline is clear.",
+      "Recommendations are decision-oriented.",
+      "Darian review is complete before delivery.",
+    ],
+  },
+  // PHASE 6 — Project management and closeout
+  {
+    number: 21,
+    title: "Maintain biweekly check-in notes and action items",
+    priority: "P2",
+    dueDate: "2026-09-13",
+    labels: ["project-management", "check-ins"],
+    description:
+      "Keep recurring project communication organized so decisions, blockers, and next steps do not get lost.",
+    checklist: [
+      "Create check-in note template.",
+      "Track decisions.",
+      "Track blockers.",
+      "Track action items.",
+      "Carry unresolved items forward.",
+    ],
+    acceptanceCriteria: [
+      "Check-in notes are current.",
+      "Open action items are visible.",
+      "Decisions are captured.",
+      "Darian/client follow-ups are easy to identify.",
+    ],
+  },
+  {
+    number: 22,
+    title: "Create client handoff packet",
+    priority: "P1",
+    dueDate: "2026-09-16",
+    labels: ["handoff", "deliverable"],
+    description:
+      "Package final materials so EBAC can understand what was delivered, what decisions remain, and what should happen next.",
+    checklist: [
+      "Gather final audit.",
+      "Gather Opportunities Map.",
+      "Gather Phase Two menu.",
+      "Gather presentation.",
+      "Summarize open decisions.",
+      "Summarize recommended next actions.",
+    ],
+    acceptanceCriteria: [
+      "Final packet is organized.",
+      "Client can use materials after the engagement.",
+      "Open decisions are clear.",
+      "Next steps are explicit.",
+    ],
+  },
+  {
+    number: 23,
+    title: "Close Phase One and capture lessons learned",
+    priority: "P2",
+    dueDate: "2026-09-20",
+    labels: ["closeout", "reusable-assets"],
+    description:
+      "Complete internal closeout with Darian and document what should be reused for future AI-for-nonprofits work.",
+    checklist: [
+      "Confirm final deliverables sent.",
+      "Confirm follow-up owner.",
+      "Capture lessons learned.",
+      "Capture reusable templates.",
+      "Identify Phase Two sales/follow-up opportunities.",
+    ],
+    acceptanceCriteria: [
+      "Phase One is closed cleanly.",
+      "Follow-up ownership is clear.",
+      "Reusable assets are captured.",
+      "Phase Two opportunities are documented.",
     ],
   },
 ];
+
+export const KICKOFF_CARD_NUMBERS = EBAC_KICKOFF_CARDS.map((card) => card.number);

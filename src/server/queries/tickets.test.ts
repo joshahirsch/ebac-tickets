@@ -36,7 +36,7 @@ describe("getTicketById", () => {
     ticketFindFirst.mockResolvedValue({
       id: "cmrc5885y002ylmhmodfqkx5g",
       number: 19,
-      title: "Draft training guide and quick-start SOP",
+      title: "Build Phase Two implementation menu",
       project: { id: "proj-pmgt", key: "PMGT", name: "EBAC Project Management" },
     });
 

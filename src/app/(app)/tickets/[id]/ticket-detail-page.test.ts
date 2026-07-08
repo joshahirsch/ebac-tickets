@@ -46,20 +46,20 @@ const adminUser = {
 const pmgtDescription = [
   "## Purpose",
   "",
-  "Document the training guide and quick-start SOP.",
+  "Define realistic next-phase options EBAC can choose from after the Phase One audit and roadmap.",
   "",
   "## Checklist",
-  "- Draft outline",
-  "- Review with program leads",
+  "- Identify implementation workstreams.",
+  "- Define light, standard, and premium options if useful.",
   "",
   "## Acceptance criteria",
-  "- Guide is published",
+  "- Phase Two menu is clear.",
 ].join("\n");
 
 const pmgtTicket = {
   id: "cmrc5885y002ylmhmodfqkx5g",
   number: 19,
-  title: "Draft training guide and quick-start SOP",
+  title: "Build Phase Two implementation menu",
   description: pmgtDescription,
   status: "TODO",
   priority: "MEDIUM",
@@ -94,11 +94,13 @@ describe("TicketDetailPage", () => {
 
     expect(getTicketById).toHaveBeenCalledWith("cmrc5885y002ylmhmodfqkx5g", "ws-1");
     expect(html).toContain("PMGT-19");
-    expect(html).toContain("Draft training guide and quick-start SOP");
+    expect(html).toContain("Build Phase Two implementation menu");
     expect(html).toContain("Purpose");
     expect(html).toContain("Checklist");
     expect(html).toContain("Acceptance criteria");
-    expect(html).toContain("Document the training guide and quick-start SOP.");
+    expect(html).toContain(
+      "Define realistic next-phase options EBAC can choose from after the Phase One audit and roadmap.",
+    );
   });
 
   it("does not render OPS-3 when resolving a PMGT ticket id", async () => {
@@ -129,7 +131,7 @@ describe("TicketDetailPage", () => {
     vi.mocked(getTicketById).mockResolvedValue({
       ...pmgtTicket,
       number: 2,
-      title: "Confirm EBAC stakeholder roster",
+      title: "Build EBAC stakeholder and interview map",
       dueDate: new Date("2026-07-13T00:00:00.000Z"),
     } as never);
 

@@ -7,7 +7,7 @@ import type { TicketListItem } from "@/server/queries/tickets";
 const pmgtTicket = {
   id: "cmrc5885y002ylmhmodfqkx5g",
   number: 19,
-  title: "Draft training guide and quick-start SOP",
+  title: "Build Phase Two implementation menu",
   status: "TODO",
   priority: "MEDIUM",
   type: "TASK",
@@ -25,7 +25,7 @@ describe("TicketCard detail links", () => {
 
     expect(html).toContain('href="/tickets/cmrc5885y002ylmhmodfqkx5g"');
     expect(html).toContain("PMGT-19");
-    expect(html).toContain("Draft training guide and quick-start SOP");
+    expect(html).toContain("Build Phase Two implementation menu");
   });
 });
 
