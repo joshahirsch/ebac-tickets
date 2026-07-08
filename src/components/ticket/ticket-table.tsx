@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { format, isPast } from "date-fns";
 import { Archive, ArrowDown, ArrowUp, RotateCcw } from "lucide-react";
-import type { TicketStatus, TicketPriority, TicketType, Role } from "@prisma/client";
+import type { TicketStatus, TicketPriority, TicketType } from "@prisma/client";
 import {
   archiveTicketAction,
   bulkArchiveTicketsAction,
@@ -25,8 +25,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { ticketTableShowsArchiveControls } from "@/components/ticket/ticket-table.archive";
-
 type TicketLabel = { labelId: string; label: { id: string; name: string; color: string } };
 
 export type TicketTableItem = {
@@ -87,16 +85,15 @@ export function TicketTable({
   tickets,
   currentSort,
   sortHref,
-  userRole,
+  canArchive,
   viewingArchived,
 }: {
   tickets: TicketTableItem[];
   currentSort: string;
   sortHref: (field: string) => string;
-  userRole: Role;
+  canArchive: boolean;
   viewingArchived: boolean;
 }) {
-  const canArchive = ticketTableShowsArchiveControls(userRole);
   const router = useRouter();
   const [visibleTickets, setVisibleTickets] = useState(tickets);
   const [selected, setSelected] = useState<Set<string>>(new Set());

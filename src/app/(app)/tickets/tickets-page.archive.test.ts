@@ -9,9 +9,10 @@ const pageSource = readFileSync(
 );
 
 describe("tickets page archive wiring", () => {
-  it("uses TicketTable and passes the signed-in role for archive UI", () => {
+  it("uses TicketTable and passes server-computed canArchive for archive UI", () => {
     expect(pageSource).toContain('from "@/components/ticket/ticket-table"');
     expect(pageSource).toContain("<TicketTable");
-    expect(pageSource).toContain("userRole={user.role}");
+    expect(pageSource).toContain("canArchiveTickets(user.role)");
+    expect(pageSource).toContain("canArchive={canArchive}");
   });
 });

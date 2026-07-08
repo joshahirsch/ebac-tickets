@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import { requireUser } from "@/lib/auth";
-import { can } from "@/lib/rbac";
+import { can, canArchiveTickets } from "@/lib/rbac";
 import { getTicketsList, type TicketListParams } from "@/server/queries/tickets";
 import { getProjects, getAssignableUsers } from "@/server/queries/lookups";
 import { TicketFilters } from "@/components/ticket/ticket-filters";
@@ -14,6 +14,21 @@ type SP = Record<string, string | undefined>;
 
 export default async function TicketsPage({ searchParams }: { searchParams: SP }) {
   const user = await requireUser();
+  const canArchive = canArchiveTickets(user.role);
+
+  if (
+    process.env.EBAC_ARCHIVE_DEBUG === "1" ||
+    process.env.NODE_ENV !== "production" ||
+    user.role === "ADMIN"
+  ) {
+    console.log("[tickets/page] archive debug", {
+      email: user.email,
+      role: user.role,
+      canTicketArchive: can(user.role, "ticket:archive"),
+      canArchiveTickets: canArchiveTickets(user.role),
+      canArchiveProp: canArchive,
+    });
+  }
 
   // Resolve "me" for assignee filter.
   const assigneeId = searchParams.assigneeId === "me" ? user.id : searchParams.assigneeId;
@@ -55,6 +70,11 @@ export default async function TicketsPage({ searchParams }: { searchParams: SP }
         <div>
           <h1 className="text-2xl font-semibold">Tickets</h1>
           <p className="text-sm text-muted-foreground">{tickets.length} shown</p>
+          {process.env.EBAC_ARCHIVE_DEBUG === "1" || user.role === "ADMIN" ? (
+            <p className="text-xs text-muted-foreground">
+              Archive debug: role={user.role}, canArchive={String(canArchive)}
+            </p>
+          ) : null}
         </div>
         {can(user.role, "ticket:create") ? (
           <Button asChild size="sm">
@@ -85,7 +105,7 @@ export default async function TicketsPage({ searchParams }: { searchParams: SP }
         }))}
         currentSort={currentSort}
         sortHref={sortHref}
-        userRole={user.role}
+        canArchive={canArchive}
         viewingArchived={searchParams.status === "ARCHIVED"}
       />
     </div>
