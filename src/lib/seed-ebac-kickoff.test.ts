@@ -4,9 +4,12 @@ import {
   KICKOFF_CARD_NUMBERS,
   KICKOFF_DEFAULT_STATUS,
   KICKOFF_LABEL_META,
+  KICKOFF_REPORTER_EMAIL,
+  KICKOFF_REPORTER_NAME,
   collectKickoffLabelNames,
   formatKickoffDescription,
   kickoffDescriptionNeedsUpdate,
+  kickoffReporterNeedsUpdate,
   mapKickoffPriority,
   parseKickoffDueDate,
   planKickoffCardSeedAction,
@@ -61,6 +64,37 @@ describe("seed-ebac-kickoff", () => {
     expect(kickoffDescriptionNeedsUpdate("Too short", expected)).toBe(true);
     expect(kickoffDescriptionNeedsUpdate("Purpose text only", expected)).toBe(true);
     expect(kickoffDescriptionNeedsUpdate(expected, expected)).toBe(false);
+  });
+
+  it("detects when kickoff reporter id does not match expected user", () => {
+    expect(kickoffReporterNeedsUpdate("admin-id", "josh-id")).toBe(true);
+    expect(kickoffReporterNeedsUpdate("josh-id", "josh-id")).toBe(false);
+    expect(kickoffReporterNeedsUpdate(null, "josh-id")).toBe(true);
+  });
+
+  it("defines canonical kickoff reporter identity", () => {
+    expect(KICKOFF_REPORTER_NAME).toBe("Josh Hirsch");
+    expect(KICKOFF_REPORTER_EMAIL).toBe("josh.hirsch@gmail.com");
+  });
+
+  it("plans update when reporter does not match Josh Hirsch", () => {
+    const expected = formatKickoffDescription({
+      description: "Purpose text",
+      checklist: ["Step one"],
+      acceptanceCriteria: ["Done"],
+    });
+
+    expect(
+      planKickoffCardSeedAction({
+        exists: true,
+        existingTitle: "Kickoff agenda",
+        expectedTitle: "Kickoff agenda",
+        existingDescription: expected,
+        expectedDescription: expected,
+        labelsMatch: true,
+        reporterMatches: false,
+      }),
+    ).toBe("update");
   });
 
   it("plans update when an existing seeded card is missing description content", () => {

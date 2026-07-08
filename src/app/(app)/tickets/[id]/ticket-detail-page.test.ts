@@ -70,7 +70,7 @@ const pmgtTicket = {
   updatedAt: new Date("2026-07-08T00:00:00.000Z"),
   project: { id: "proj-pmgt", key: "PMGT", name: "EBAC Project Management" },
   assignee: null,
-  reporter: { id: "admin-1", name: "EBAC Admin", email: "admin@ebac.org" },
+  reporter: { id: "josh-1", name: "Josh Hirsch", email: "josh.hirsch@gmail.com" },
   labels: [],
   comments: [],
   activities: [],
@@ -101,6 +101,7 @@ describe("TicketDetailPage", () => {
     expect(html).toContain(
       "Define realistic next-phase options EBAC can choose from after the Phase One audit and roadmap.",
     );
+    expect(html).toContain("Josh Hirsch");
   });
 
   it("does not render OPS-3 when resolving a PMGT ticket id", async () => {

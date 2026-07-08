@@ -13,9 +13,11 @@ import {
   ActivityType,
   PrismaClient,
   ProjectStatus,
+  Role,
   TicketType,
   type Project,
   type TicketLabel,
+  type User,
   type Workspace,
 } from "@prisma/client";
 import {
@@ -26,8 +28,11 @@ import {
   KICKOFF_DEFAULT_STATUS,
   KICKOFF_LABEL_META,
   KICKOFF_PROJECT_KEY_FALLBACKS,
+  KICKOFF_REPORTER_EMAIL,
+  KICKOFF_REPORTER_NAME,
   collectKickoffLabelNames,
   formatKickoffDescription,
+  kickoffReporterNeedsUpdate,
   mapKickoffPriority,
   parseKickoffDueDate,
   planKickoffCardSeedAction,
@@ -41,6 +46,9 @@ type Summary = {
   skipped: string[];
   archived: string[];
   failed: Array<{ title: string; error: string }>;
+  reporterUpdated: number;
+  reporterAlreadyCorrect: number;
+  reporterFailed: number;
 };
 
 function parseArgs(argv: string[]) {
@@ -262,6 +270,59 @@ async function archiveStaleKickoffTickets(
   return archived;
 }
 
+type EnsureReporterResult = {
+  user: Pick<User, "id" | "email" | "name">;
+  created: boolean;
+};
+
+async function ensureKickoffReporter(
+  workspaceId: string,
+  projectId: string,
+  dryRun: boolean,
+): Promise<EnsureReporterResult> {
+  const existing = await prisma.user.findUnique({
+    where: { email: KICKOFF_REPORTER_EMAIL },
+    select: { id: true, email: true, name: true },
+  });
+
+  if (dryRun) {
+    if (existing) {
+      return { user: existing, created: false };
+    }
+    return {
+      user: {
+        id: "dry-run-josh",
+        email: KICKOFF_REPORTER_EMAIL,
+        name: KICKOFF_REPORTER_NAME,
+      },
+      created: true,
+    };
+  }
+
+  const user = await prisma.user.upsert({
+    where: { email: KICKOFF_REPORTER_EMAIL },
+    update: {
+      name: KICKOFF_REPORTER_NAME,
+      workspaceId,
+    },
+    create: {
+      email: KICKOFF_REPORTER_EMAIL,
+      name: KICKOFF_REPORTER_NAME,
+      role: Role.MEMBER,
+      workspaceId,
+    },
+    select: { id: true, email: true, name: true },
+  });
+
+  await prisma.projectMember.upsert({
+    where: { projectId_userId: { projectId, userId: user.id } },
+    update: {},
+    create: { projectId, userId: user.id },
+  });
+
+  return { user, created: !existing };
+}
+
 async function seedKickoffCards(dryRun: boolean, ensureProject: boolean): Promise<Summary> {
   const summary: Summary = {
     created: [],
@@ -269,19 +330,25 @@ async function seedKickoffCards(dryRun: boolean, ensureProject: boolean): Promis
     skipped: [],
     archived: [],
     failed: [],
+    reporterUpdated: 0,
+    reporterAlreadyCorrect: 0,
+    reporterFailed: 0,
   };
 
   const workspace = await resolveWorkspace();
   const project = await resolveProject(workspace.id, ensureProject, dryRun);
   const topicLabels = await ensureTopicLabels(workspace.id, dryRun);
-
-  const reporter = await prisma.user.findFirst({
-    where: { workspaceId: workspace.id, role: "ADMIN" },
-    orderBy: { createdAt: "asc" },
-  });
+  const { user: reporter, created: reporterCreated } = await ensureKickoffReporter(
+    workspace.id,
+    project.id,
+    dryRun,
+  );
 
   console.log(`Workspace: ${workspace.name} (${workspace.slug})`);
   console.log(`Project:   ${project.name} (${project.key})`);
+  console.log(`Reporter:  ${reporter.name} <${reporter.email}> (${reporter.id})${
+    reporterCreated ? " [created]" : " [found]"
+  }`);
   console.log(`Cards:     ${EBAC_KICKOFF_CARDS.length}`);
   console.log(`Mode:      ${dryRun ? "DRY RUN (no writes)" : "APPLY"}`);
   console.log("");
@@ -307,6 +374,7 @@ async function seedKickoffCards(dryRun: boolean, ensureProject: boolean): Promis
 
       if (existing) {
         const existingLabelIds = existing.labels.map((l) => l.labelId);
+        const reporterMatches = !kickoffReporterNeedsUpdate(existing.reporterId, reporter.id);
         const action = planKickoffCardSeedAction({
           exists: true,
           existingTitle: existing.title,
@@ -314,6 +382,7 @@ async function seedKickoffCards(dryRun: boolean, ensureProject: boolean): Promis
           existingDescription: existing.description,
           expectedDescription: description,
           labelsMatch: labelsMatch(existingLabelIds, expectedLabelIds),
+          reporterMatches,
         });
 
         const fieldsChanged =
@@ -324,16 +393,24 @@ async function seedKickoffCards(dryRun: boolean, ensureProject: boolean): Promis
           existing.dueDate?.toISOString() !== dueDate.toISOString();
 
         if (!fieldsChanged) {
+          if (reporterMatches) {
+            summary.reporterAlreadyCorrect += 1;
+          }
           summary.skipped.push(cardLabel);
           console.log(`  skip  ${cardLabel}`);
           continue;
         }
 
         if (dryRun) {
+          if (!reporterMatches) {
+            summary.reporterUpdated += 1;
+          }
           summary.updated.push(cardLabel);
           console.log(`  update (dry-run) ${cardLabel}`);
           continue;
         }
+
+        const hadWrongReporter = kickoffReporterNeedsUpdate(existing.reporterId, reporter.id);
 
         await prisma.$transaction(async (tx) => {
           await tx.ticket.update({
@@ -345,6 +422,7 @@ async function seedKickoffCards(dryRun: boolean, ensureProject: boolean): Promis
               status,
               dueDate,
               isArchived: false,
+              reporterId: reporter.id,
             },
           });
 
@@ -358,6 +436,10 @@ async function seedKickoffCards(dryRun: boolean, ensureProject: boolean): Promis
         });
 
         await syncTicketLabels(existing.id, expectedLabelIds, dryRun);
+
+        if (hadWrongReporter) {
+          summary.reporterUpdated += 1;
+        }
 
         summary.updated.push(cardLabel);
         console.log(`  update ${cardLabel}`);
@@ -381,7 +463,7 @@ async function seedKickoffCards(dryRun: boolean, ensureProject: boolean): Promis
             type: TicketType.TASK,
             dueDate,
             projectId: project.id,
-            reporterId: reporter?.id ?? null,
+            reporterId: reporter.id,
             assigneeId: null,
             labels: {
               create: expectedLabelIds.map((labelId) => ({ labelId })),
@@ -392,9 +474,9 @@ async function seedKickoffCards(dryRun: boolean, ensureProject: boolean): Promis
         await tx.ticketActivity.create({
           data: {
             type: ActivityType.TICKET_CREATED,
-            message: `${reporter?.name ?? reporter?.email ?? "Kickoff seed"} created this ticket`,
+            message: `${reporter.name ?? reporter.email} created this ticket`,
             ticketId: ticket.id,
-            actorId: reporter?.id ?? null,
+            actorId: reporter.id,
           },
         });
 
@@ -412,6 +494,7 @@ async function seedKickoffCards(dryRun: boolean, ensureProject: boolean): Promis
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       summary.failed.push({ title: cardLabel, error: message });
+      summary.reporterFailed += 1;
       console.error(`  fail  ${cardLabel}: ${message}`);
     }
   }
@@ -436,6 +519,9 @@ async function main() {
     console.log(`  skipped:  ${summary.skipped.length}`);
     console.log(`  archived: ${summary.archived.length}`);
     console.log(`  failed:   ${summary.failed.length}`);
+    console.log(`  reporter updated:          ${summary.reporterUpdated}`);
+    console.log(`  reporter already correct:  ${summary.reporterAlreadyCorrect}`);
+    console.log(`  reporter failed:           ${summary.reporterFailed}`);
 
     if (summary.failed.length > 0) {
       process.exitCode = 1;

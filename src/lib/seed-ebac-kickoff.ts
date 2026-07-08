@@ -3,6 +3,10 @@ import type { TicketPriority, TicketStatus } from "@prisma/client";
 /** Workspace slug used by prisma/seed.ts */
 export const EBAC_WORKSPACE_SLUG = "ebac";
 
+/** Canonical reporter for PMGT kickoff cards (ticket Meta panel uses reporterId). */
+export const KICKOFF_REPORTER_EMAIL = "josh.hirsch@gmail.com";
+export const KICKOFF_REPORTER_NAME = "Josh Hirsch";
+
 /**
  * Project key for kickoff cards. Override with EBAC_KICKOFF_PROJECT_KEY when the
  * rollout board uses a different key (e.g. "EBAC").
@@ -122,6 +126,13 @@ export function kickoffDescriptionNeedsUpdate(
 
 export type KickoffSeedPlan = "create" | "update" | "skip";
 
+export function kickoffReporterNeedsUpdate(
+  existingReporterId: string | null | undefined,
+  expectedReporterId: string,
+): boolean {
+  return existingReporterId !== expectedReporterId;
+}
+
 export function planKickoffCardSeedAction(input: {
   exists: boolean;
   existingTitle: string | null;
@@ -129,12 +140,14 @@ export function planKickoffCardSeedAction(input: {
   existingDescription: string | null | undefined;
   expectedDescription: string;
   labelsMatch: boolean;
+  reporterMatches?: boolean;
 }): KickoffSeedPlan {
   if (!input.exists) return "create";
   if (
     input.existingTitle !== input.expectedTitle ||
     kickoffDescriptionNeedsUpdate(input.existingDescription, input.expectedDescription) ||
-    !input.labelsMatch
+    !input.labelsMatch ||
+    input.reporterMatches === false
   ) {
     return "update";
   }
