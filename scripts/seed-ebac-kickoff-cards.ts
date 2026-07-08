@@ -25,9 +25,11 @@ import {
   KICKOFF_PHASE_META,
   KICKOFF_PROJECT_KEY_FALLBACKS,
   formatKickoffDescription,
+  kickoffDescriptionNeedsUpdate,
   mapKickoffPhaseStatus,
   mapKickoffPriority,
   parseKickoffDueDate,
+  planKickoffCardSeedAction,
   type KickoffPhase,
 } from "../src/lib/seed-ebac-kickoff";
 
@@ -155,14 +157,20 @@ async function ensurePhaseLabels(
     [KickoffPhase, (typeof KICKOFF_PHASE_META)[KickoffPhase]]
   >) {
     const labelName = phase;
+
     if (dryRun) {
-      labels[phase] = {
-        id: `dry-run-${phase}`,
-        name: labelName,
-        color: meta.labelColor,
-        workspaceId,
-        createdAt: new Date(),
-      };
+      const existing = await prisma.ticketLabel.findUnique({
+        where: { workspaceId_name: { workspaceId, name: labelName } },
+      });
+      labels[phase] =
+        existing ??
+        ({
+          id: `dry-run-${phase}`,
+          name: labelName,
+          color: meta.labelColor,
+          workspaceId,
+          createdAt: new Date(),
+        } as TicketLabel);
       continue;
     }
 
@@ -214,37 +222,42 @@ async function seedKickoffCards(dryRun: boolean, ensureProject: boolean): Promis
       });
 
       if (existing) {
-        const needsUpdate =
-          existing.description !== description ||
-          existing.priority !== priority ||
-          existing.status !== status ||
-          existing.dueDate?.toISOString() !== dueDate.toISOString() ||
-          !existing.labels.some((l) => l.labelId === phaseLabel.id);
+        const hasPhaseLabel = existing.labels.some((l) => l.labelId === phaseLabel.id);
+        const action = planKickoffCardSeedAction({
+          existingTitle: existing.title,
+          existingDescription: existing.description,
+          expectedDescription: description,
+          hasPhaseLabel,
+        });
 
-        if (!needsUpdate) {
+        if (action === "skip") {
           summary.skipped.push(card.title);
           console.log(`  skip  ${card.title}`);
           continue;
         }
 
+        const descriptionNeedsUpdate = kickoffDescriptionNeedsUpdate(
+          existing.description,
+          description,
+        );
+
         if (dryRun) {
           summary.updated.push(card.title);
-          console.log(`  update (dry-run) ${card.title}`);
+          const parts = [];
+          if (descriptionNeedsUpdate) parts.push("description");
+          if (!hasPhaseLabel) parts.push("phase label");
+          console.log(`  update (dry-run) ${card.title} [${parts.join(", ")}]`);
           continue;
         }
 
         await prisma.$transaction(async (tx) => {
-          await tx.ticket.update({
-            where: { id: existing.id },
-            data: {
-              description,
-              priority,
-              status,
-              dueDate,
-            },
-          });
+          if (descriptionNeedsUpdate) {
+            await tx.ticket.update({
+              where: { id: existing.id },
+              data: { description },
+            });
+          }
 
-          const hasPhaseLabel = existing.labels.some((l) => l.labelId === phaseLabel.id);
           if (!hasPhaseLabel) {
             await tx.ticketLabelOnTicket.create({
               data: { ticketId: existing.id, labelId: phaseLabel.id },

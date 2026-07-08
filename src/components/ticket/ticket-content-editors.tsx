@@ -7,6 +7,7 @@ import { updateTicketAction } from "@/server/actions/tickets";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { TicketDescription } from "@/components/ticket/ticket-description";
 
 export function TitleEditor({
   ticketId,
@@ -90,7 +91,7 @@ export function DescriptionEditor({
     return (
       <div className="group space-y-2">
         {value ? (
-          <p className="whitespace-pre-wrap text-sm leading-relaxed">{value}</p>
+          <TicketDescription text={value} />
         ) : (
           <p className="text-sm italic text-muted-foreground">No description.</p>
         )}

@@ -30,6 +30,7 @@ export type KickoffCardDef = {
   description: string;
   checklist?: string[];
   acceptanceCriteria?: string[];
+  notes?: string;
 };
 
 export const KICKOFF_PHASE_META: Record<
@@ -85,9 +86,9 @@ export function mapKickoffPhaseStatus(phase: KickoffPhase): TicketStatus {
 
 export function formatKickoffDescription(card: Pick<
   KickoffCardDef,
-  "description" | "checklist" | "acceptanceCriteria"
+  "description" | "checklist" | "acceptanceCriteria" | "notes"
 >): string {
-  const parts = [card.description.trim()];
+  const parts = ["## Purpose", "", card.description.trim()];
 
   if (card.checklist?.length) {
     parts.push("", "## Checklist", ...card.checklist.map((item) => `- ${item}`));
@@ -101,7 +102,51 @@ export function formatKickoffDescription(card: Pick<
     );
   }
 
+  if (card.notes?.trim()) {
+    parts.push("", "## Notes", "", card.notes.trim());
+  }
+
   return parts.join("\n");
+}
+
+/** Minimum length for a kickoff description to be considered populated. */
+export const KICKOFF_DESCRIPTION_MIN_LENGTH = 80;
+
+export function kickoffDescriptionNeedsUpdate(
+  existingDescription: string | null | undefined,
+  expectedDescription: string,
+): boolean {
+  const existing = (existingDescription ?? "").trim();
+  if (!existing) return true;
+  if (existing === expectedDescription) return false;
+  if (existing.length < KICKOFF_DESCRIPTION_MIN_LENGTH) return true;
+  if (expectedDescription.includes("## Purpose") && !existing.includes("## Purpose")) return true;
+  if (expectedDescription.includes("## Checklist") && !existing.includes("## Checklist")) return true;
+  if (
+    expectedDescription.includes("## Acceptance criteria") &&
+    !existing.includes("## Acceptance criteria")
+  ) {
+    return true;
+  }
+  return existing !== expectedDescription;
+}
+
+export type KickoffSeedPlan = "create" | "update-description" | "skip";
+
+export function planKickoffCardSeedAction(input: {
+  existingTitle: string | null;
+  existingDescription: string | null | undefined;
+  expectedDescription: string;
+  hasPhaseLabel: boolean;
+}): KickoffSeedPlan {
+  if (!input.existingTitle) return "create";
+  if (
+    kickoffDescriptionNeedsUpdate(input.existingDescription, input.expectedDescription) ||
+    !input.hasPhaseLabel
+  ) {
+    return "update-description";
+  }
+  return "skip";
 }
 
 export function parseKickoffDueDate(isoDate: string): Date {
@@ -210,7 +255,9 @@ export const EBAC_KICKOFF_CARDS: KickoffCardDef[] = [
     priority: "P0",
     dueDate: "2026-07-13",
     description:
-      "Finalize the categories users will select when creating or triaging tickets.\n\nSuggested categories:\n\n- General Support\n- Program Operations\n- Facilities\n- Finance / Billing\n- Administrative\n- External Partner\n- Urgent Issue\n- Reporting / Data\n- Access / Permission\n- Other",
+      "Finalize the categories users will select when creating or triaging tickets.",
+    notes:
+      "Suggested categories:\n\n- General Support\n- Program Operations\n- Facilities\n- Finance / Billing\n- Administrative\n- External Partner\n- Urgent Issue\n- Reporting / Data\n- Access / Permission\n- Other",
     checklist: [
       "Review suggested categories",
       "Remove categories that are not needed",
@@ -230,7 +277,9 @@ export const EBAC_KICKOFF_CARDS: KickoffCardDef[] = [
     priority: "P0",
     dueDate: "2026-07-13",
     description:
-      "Finalize the statuses that tickets/cards should move through from creation to completion.\n\nSuggested statuses:\n\n- New\n- Triage\n- Assigned\n- In Progress\n- Waiting\n- Blocked\n- Done\n- Archived",
+      "Finalize the statuses that tickets/cards should move through from creation to completion.",
+    notes:
+      "Suggested statuses:\n\n- New\n- Triage\n- Assigned\n- In Progress\n- Waiting\n- Blocked\n- Done\n- Archived",
     checklist: [
       "Confirm status names",
       "Define what each status means",
@@ -251,7 +300,9 @@ export const EBAC_KICKOFF_CARDS: KickoffCardDef[] = [
     priority: "P0",
     dueDate: "2026-07-13",
     description:
-      "Agree on how EBAC will classify urgency and what expected response/resolution targets apply to each priority.\n\nSuggested priorities:\n\n- Urgent\n- High\n- Normal\n- Low",
+      "Agree on how EBAC will classify urgency and what expected response/resolution targets apply to each priority.",
+    notes:
+      "Suggested priorities:\n\n- Urgent\n- High\n- Normal\n- Low",
     checklist: [
       "Define urgent",
       "Define high",
@@ -299,6 +350,12 @@ export const EBAC_KICKOFF_CARDS: KickoffCardDef[] = [
     dueDate: "2026-07-13",
     description:
       "Decide whether all users, managers only, admins only, or selected requestors can create tickets.",
+    checklist: [
+      "Review current intake channels and who submits work today",
+      "List candidate creation rules (all users, managers, admins, selected requestors)",
+      "Confirm exceptions for urgent or sensitive requests",
+      "Document the approved creation rule",
+    ],
     acceptanceCriteria: [
       "Ticket creation rule is documented.",
       "Any exceptions are captured.",
@@ -311,6 +368,12 @@ export const EBAC_KICKOFF_CARDS: KickoffCardDef[] = [
     dueDate: "2026-07-13",
     description:
       "Decide whether assignment is limited to admins/managers or available to broader users.",
+    checklist: [
+      "Review who triages and assigns work today",
+      "Decide whether assignees can reassign tickets",
+      "Confirm whether team leads can assign within their team",
+      "Document the approved assignment rule",
+    ],
     acceptanceCriteria: [
       "Assignment rule is documented.",
       "Assignment permission aligns with EBAC workflow.",
@@ -323,6 +386,12 @@ export const EBAC_KICKOFF_CARDS: KickoffCardDef[] = [
     dueDate: "2026-07-13",
     description:
       "Decide whether tickets can be closed by the assignee, requester, manager, or admin only.",
+    checklist: [
+      "Define who can mark a ticket done or closed",
+      "Decide whether requesters can close their own tickets",
+      "Confirm reopen rules after closure",
+      "Document the approved closure rule",
+    ],
     acceptanceCriteria: [
       "Closure rule is documented.",
       "Reopen behavior is documented if needed.",
@@ -335,6 +404,12 @@ export const EBAC_KICKOFF_CARDS: KickoffCardDef[] = [
     dueDate: "2026-07-15",
     description:
       "Decide who should see operational dashboards and what information each audience should be able to view.",
+    checklist: [
+      "List dashboard audiences (leadership, managers, staff, read-only viewers)",
+      "Identify metrics each audience needs",
+      "Flag any sensitive data that should be restricted",
+      "Document approved dashboard visibility rules",
+    ],
     acceptanceCriteria: [
       "Dashboard audience is approved.",
       "Any sensitive visibility restrictions are documented.",
@@ -371,7 +446,9 @@ export const EBAC_KICKOFF_CARDS: KickoffCardDef[] = [
     priority: "P1",
     dueDate: "2026-07-15",
     description:
-      "Decide what events should generate notifications and who should receive them.\n\nSuggested notification triggers:\n\n- New ticket assigned\n- Comment added\n- Status changed\n- Due date approaching\n- Ticket overdue\n- Ticket blocked\n- User mentioned\n- Ticket closed",
+      "Decide what events should generate notifications and who should receive them.",
+    notes:
+      "Suggested notification triggers:\n\n- New ticket assigned\n- Comment added\n- Status changed\n- Due date approaching\n- Ticket overdue\n- Ticket blocked\n- User mentioned\n- Ticket closed",
     checklist: [
       "Confirm required notification triggers",
       "Confirm recipients for each trigger",
@@ -391,7 +468,9 @@ export const EBAC_KICKOFF_CARDS: KickoffCardDef[] = [
     priority: "P1",
     dueDate: "2026-07-15",
     description:
-      "Confirm what EBAC leadership and managers need to see on dashboards and reports.\n\nSuggested dashboard items:\n\n- Open tickets\n- Due this week\n- Overdue tickets\n- Blocked tickets\n- Tickets by status\n- Open tickets by assignee\n- Tickets by category\n- Aging tickets\n- Recently completed tickets",
+      "Confirm what EBAC leadership and managers need to see on dashboards and reports.",
+    notes:
+      "Suggested dashboard items:\n\n- Open tickets\n- Due this week\n- Overdue tickets\n- Blocked tickets\n- Tickets by status\n- Open tickets by assignee\n- Tickets by category\n- Aging tickets\n- Recently completed tickets",
     checklist: [
       "Confirm required metrics",
       "Confirm dashboard audience",
@@ -506,7 +585,9 @@ export const EBAC_KICKOFF_CARDS: KickoffCardDef[] = [
     priority: "P1",
     dueDate: "2026-07-20",
     description:
-      "Agree on what must be true before EBAC moves from pilot/testing to live usage.\n\nSuggested go-live criteria:\n\n- Stakeholders approved workflow\n- Roles and permissions configured\n- Initial users loaded\n- Ticket categories finalized\n- Status workflow finalized\n- Dashboard MVP working\n- UAT blockers resolved\n- Training guide ready\n- Support/feedback process defined",
+      "Agree on what must be true before EBAC moves from pilot/testing to live usage.",
+    notes:
+      "Suggested go-live criteria:\n\n- Stakeholders approved workflow\n- Roles and permissions configured\n- Initial users loaded\n- Ticket categories finalized\n- Status workflow finalized\n- Dashboard MVP working\n- UAT blockers resolved\n- Training guide ready\n- Support/feedback process defined",
     checklist: [
       "Confirm required launch criteria",
       "Separate launch blockers from post-launch improvements",
